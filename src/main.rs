@@ -8,6 +8,9 @@ struct Args {
     /// Allow removing empty directories
     #[arg(short = 'd')]
     allow_dir: bool,
+    /// Force removal without prompting, ignore non-existent files
+    #[arg(short = 'f')]
+    force: bool,
     /// Recursively remove directories
     #[arg(short = 'r')]
     recursive: bool,
@@ -38,7 +41,13 @@ fn process_path(path: &Path, args: &Args) -> Result<(), String> {
                 handle_file(path)
             }
         }
-        Err(e) => Err(format!("safecmd: cannot remove '{}': {}", path.display(), e)),
+        Err(e) => {
+            if args.force && e.kind() == std::io::ErrorKind::NotFound {
+                Ok(()) // With -f flag, ignore non-existent files
+            } else {
+                Err(format!("safecmd: cannot remove '{}': {}", path.display(), e))
+            }
+        }
     }
 }
 

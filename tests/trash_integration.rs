@@ -108,3 +108,46 @@ fn directory_with_r_flag() {
     // directory should no longer exist
     assert!(!dir_path.exists(), "directory still exists at original path");
 }
+
+#[test]
+fn non_existent_file_without_f_flag_fails() {
+    // run the binary on a non-existent file without -f
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("non_existent_file.txt")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("cannot remove"));
+}
+
+#[test]
+fn non_existent_file_with_f_flag_succeeds() {
+    // run the binary on a non-existent file with -f
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("-f")
+        .arg("non_existent_file.txt")
+        .assert()
+        .success();
+}
+
+#[test]
+fn mixed_files_with_f_flag() {
+    // create a temporary file
+    let temp_dir = tempdir().expect("create tmp dir");
+    let existing_file = temp_dir.path().join("existing.txt");
+    File::create(&existing_file).expect("create file");
+
+    // run the binary with -f on both existing and non-existent files
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("-f")
+        .arg(&existing_file)
+        .arg("non_existent.txt")
+        .arg("another_non_existent.txt")
+        .assert()
+        .success();
+
+    // existing file should be removed
+    assert!(!existing_file.exists(), "existing file was not removed");
+}
