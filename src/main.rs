@@ -1,5 +1,5 @@
 use clap::Parser;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Move the specified file to the system trash.
 #[derive(Parser, Debug)]
@@ -20,67 +20,58 @@ fn main() {
     let mut exit_code = 0;
 
     for path in &args.path {
-        match std::fs::metadata(path) {
-            Ok(meta) => {
-                if meta.is_dir() {
-                    if !args.allow_dir && !args.recursive {
-                        eprintln!("safecmd: {}: is a directory", path.display());
-                        exit_code = 1;
-                        continue;
-                    }
-
-                    if args.recursive {
-                        if let Err(e) = trash::delete(path) {
-                            eprintln!(
-                                "safecmd: failed to remove '{}': {}",
-                                path.display(),
-                                e
-                            );
-                            exit_code = 1;
-                        }
-                        continue;
-                    }
-
-                    match std::fs::read_dir(path) {
-                        Ok(mut entries) => {
-                            if entries.next().is_none() {
-                                if let Err(e) = trash::delete(path) {
-                                    eprintln!(
-                                        "safecmd: failed to remove '{}': {}",
-                                        path.display(),
-                                        e
-                                    );
-                                    exit_code = 1;
-                                }
-                            } else {
-                                eprintln!("safecmd: {}: Directory not empty", path.display());
-                                exit_code = 1;
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "safecmd: cannot access '{}': {}",
-                                path.display(),
-                                e
-                            );
-                            exit_code = 1;
-                        }
-                    }
-                } else if let Err(e) = trash::delete(path) {
-                    eprintln!(
-                        "safecmd: failed to remove '{}': {}",
-                        path.display(),
-                        e
-                    );
-                    exit_code = 1;
-                }
-            }
-            Err(e) => {
-                eprintln!("safecmd: cannot remove '{}': {}", path.display(), e);
-                exit_code = 1;
-            }
+        if let Err(msg) = process_path(path, &args) {
+            eprintln!("{msg}");
+            exit_code = 1;
         }
     }
 
     std::process::exit(exit_code);
+}
+
+fn process_path(path: &Path, args: &Args) -> Result<(), String> {
+    match std::fs::metadata(path) {
+        Ok(meta) => {
+            if meta.is_dir() {
+                handle_directory(path, args)
+            } else {
+                handle_file(path)
+            }
+        }
+        Err(e) => Err(format!("safecmd: cannot remove '{}': {}", path.display(), e)),
+    }
+}
+
+fn handle_directory(path: &Path, args: &Args) -> Result<(), String> {
+    if args.recursive {
+        handle_recursive(path)
+    } else if args.allow_dir {
+        handle_allow_dir(path)
+    } else {
+        Err(format!("safecmd: {}: is a directory", path.display()))
+    }
+}
+
+fn handle_recursive(path: &Path) -> Result<(), String> {
+    trash::delete(path)
+        .map_err(|e| format!("safecmd: failed to remove '{}': {}", path.display(), e))
+}
+
+fn handle_allow_dir(path: &Path) -> Result<(), String> {
+    match std::fs::read_dir(path) {
+        Ok(mut entries) => {
+            if entries.next().is_none() {
+                trash::delete(path)
+                    .map_err(|e| format!("safecmd: failed to remove '{}': {}", path.display(), e))
+            } else {
+                Err(format!("safecmd: {}: Directory not empty", path.display()))
+            }
+        }
+        Err(e) => Err(format!("safecmd: cannot access '{}': {}", path.display(), e)),
+    }
+}
+
+fn handle_file(path: &Path) -> Result<(), String> {
+    trash::delete(path)
+        .map_err(|e| format!("safecmd: failed to remove '{}': {}", path.display(), e))
 }
