@@ -38,6 +38,16 @@ fn main() {
 }
 
 fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
+    // Check if path is protected by .gitignore (except for non-existent files with -f flag)
+    if (!context.args.force || path.exists()) && context.gitignore_checker.is_ignored(path) {
+        let path_type = if path.is_dir() { "directory" } else { "file" };
+        return Err(format!(
+            "safecmd: cannot remove '{}': {} is protected by .gitignore",
+            path.display(),
+            path_type
+        ));
+    }
+
     // Determine strategy based on path type and flags
     let strategy = determine_strategy(path, context)?;
 

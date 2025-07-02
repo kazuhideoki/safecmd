@@ -23,13 +23,7 @@ impl ProcessContext {
 pub struct FileStrategy;
 
 impl RemovalStrategy for FileStrategy {
-    fn validate(&self, path: &Path, context: &ProcessContext) -> Result<(), String> {
-        if context.gitignore_checker.is_ignored(path) {
-            return Err(format!(
-                "safecmd: cannot remove '{}': file is protected by .gitignore",
-                path.display()
-            ));
-        }
+    fn validate(&self, _path: &Path, _context: &ProcessContext) -> Result<(), String> {
         Ok(())
     }
 
@@ -42,13 +36,7 @@ impl RemovalStrategy for FileStrategy {
 pub struct RecursiveDirectoryStrategy;
 
 impl RemovalStrategy for RecursiveDirectoryStrategy {
-    fn validate(&self, path: &Path, context: &ProcessContext) -> Result<(), String> {
-        if context.gitignore_checker.is_ignored(path) {
-            return Err(format!(
-                "safecmd: cannot remove '{}': directory is protected by .gitignore",
-                path.display()
-            ));
-        }
+    fn validate(&self, _path: &Path, _context: &ProcessContext) -> Result<(), String> {
         Ok(())
     }
 
@@ -61,13 +49,7 @@ impl RemovalStrategy for RecursiveDirectoryStrategy {
 pub struct EmptyDirectoryStrategy;
 
 impl RemovalStrategy for EmptyDirectoryStrategy {
-    fn validate(&self, path: &Path, context: &ProcessContext) -> Result<(), String> {
-        if context.gitignore_checker.is_ignored(path) {
-            return Err(format!(
-                "safecmd: cannot remove '{}': directory is protected by .gitignore",
-                path.display()
-            ));
-        }
+    fn validate(&self, path: &Path, _context: &ProcessContext) -> Result<(), String> {
         match std::fs::read_dir(path) {
             Ok(mut entries) => {
                 if entries.next().is_some() {

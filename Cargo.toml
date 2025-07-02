@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-ignore = "0.4"
+ignore = "0.4.23"
+tempfile = "3"
 trash = "3"
 
 [dev-dependencies]
