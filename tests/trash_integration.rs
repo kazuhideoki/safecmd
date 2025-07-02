@@ -151,3 +151,92 @@ fn mixed_files_with_f_flag() {
     // existing file should be removed
     assert!(!existing_file.exists(), "existing file was not removed");
 }
+
+#[test]
+fn combined_flags_rf() {
+    // test -rf combined flag
+    let temp_dir = tempdir().expect("create tmp dir");
+    let dir_path = temp_dir.path().join("dir_to_remove");
+    fs::create_dir(&dir_path).expect("create directory");
+    File::create(dir_path.join("file.txt")).expect("create file");
+
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("-rf")
+        .arg(&dir_path)
+        .assert()
+        .success();
+
+    assert!(!dir_path.exists(), "directory was not removed with -rf");
+}
+
+#[test]
+fn combined_flags_fr() {
+    // test -fr combined flag (opposite order)
+    let temp_dir = tempdir().expect("create tmp dir");
+    let dir_path = temp_dir.path().join("dir_to_remove");
+    fs::create_dir(&dir_path).expect("create directory");
+    File::create(dir_path.join("file.txt")).expect("create file");
+
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("-fr")
+        .arg(&dir_path)
+        .assert()
+        .success();
+
+    assert!(!dir_path.exists(), "directory was not removed with -fr");
+}
+
+#[test]
+fn combined_flags_df() {
+    // test -df combined flag on empty directory
+    let temp_dir = tempdir().expect("create tmp dir");
+    let empty_dir = temp_dir.path().join("empty_dir");
+    fs::create_dir(&empty_dir).expect("create directory");
+
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("-df")
+        .arg(&empty_dir)
+        .assert()
+        .success();
+
+    assert!(!empty_dir.exists(), "empty directory was not removed with -df");
+}
+
+#[test]
+fn combined_flags_drf() {
+    // test -drf combined flag (all flags)
+    let temp_dir = tempdir().expect("create tmp dir");
+    let dir_path = temp_dir.path().join("dir_with_files");
+    fs::create_dir(&dir_path).expect("create directory");
+    File::create(dir_path.join("file.txt")).expect("create file");
+
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("-drf")
+        .arg(&dir_path)
+        .assert()
+        .success();
+
+    assert!(!dir_path.exists(), "directory was not removed with -drf");
+}
+
+#[test]
+fn combined_flags_frd() {
+    // test -frd combined flag (different order)
+    let temp_dir = tempdir().expect("create tmp dir");
+    let existing_dir = temp_dir.path().join("existing");
+    fs::create_dir(&existing_dir).expect("create directory");
+    
+    Command::cargo_bin("safecmd")
+        .expect("binary exists")
+        .arg("-frd")
+        .arg(&existing_dir)
+        .arg("non_existent_dir")
+        .assert()
+        .success();
+
+    assert!(!existing_dir.exists(), "directory was not removed with -frd");
+}
