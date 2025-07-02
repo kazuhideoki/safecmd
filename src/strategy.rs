@@ -1,4 +1,4 @@
-use crate::Args;
+use crate::{gitignore::GitignoreChecker, Args};
 use std::path::Path;
 
 pub trait RemovalStrategy {
@@ -8,18 +8,28 @@ pub trait RemovalStrategy {
 
 pub struct ProcessContext {
     pub args: Args,
+    pub gitignore_checker: GitignoreChecker,
 }
 
 impl ProcessContext {
     pub fn new(args: Args) -> Self {
-        Self { args }
+        Self {
+            args,
+            gitignore_checker: GitignoreChecker::new(),
+        }
     }
 }
 
 pub struct FileStrategy;
 
 impl RemovalStrategy for FileStrategy {
-    fn validate(&self, _path: &Path, _context: &ProcessContext) -> Result<(), String> {
+    fn validate(&self, path: &Path, context: &ProcessContext) -> Result<(), String> {
+        if context.gitignore_checker.is_ignored(path) {
+            return Err(format!(
+                "safecmd: cannot remove '{}': file is protected by .gitignore",
+                path.display()
+            ));
+        }
         Ok(())
     }
 
@@ -32,7 +42,13 @@ impl RemovalStrategy for FileStrategy {
 pub struct RecursiveDirectoryStrategy;
 
 impl RemovalStrategy for RecursiveDirectoryStrategy {
-    fn validate(&self, _path: &Path, _context: &ProcessContext) -> Result<(), String> {
+    fn validate(&self, path: &Path, context: &ProcessContext) -> Result<(), String> {
+        if context.gitignore_checker.is_ignored(path) {
+            return Err(format!(
+                "safecmd: cannot remove '{}': directory is protected by .gitignore",
+                path.display()
+            ));
+        }
         Ok(())
     }
 
@@ -45,7 +61,13 @@ impl RemovalStrategy for RecursiveDirectoryStrategy {
 pub struct EmptyDirectoryStrategy;
 
 impl RemovalStrategy for EmptyDirectoryStrategy {
-    fn validate(&self, path: &Path, _context: &ProcessContext) -> Result<(), String> {
+    fn validate(&self, path: &Path, context: &ProcessContext) -> Result<(), String> {
+        if context.gitignore_checker.is_ignored(path) {
+            return Err(format!(
+                "safecmd: cannot remove '{}': directory is protected by .gitignore",
+                path.display()
+            ));
+        }
         match std::fs::read_dir(path) {
             Ok(mut entries) => {
                 if entries.next().is_some() {

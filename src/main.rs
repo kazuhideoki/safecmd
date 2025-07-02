@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
+mod gitignore;
 mod strategy;
 use strategy::{ProcessContext, RemovalStrategy};
 
