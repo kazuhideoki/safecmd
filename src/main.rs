@@ -2,8 +2,10 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 
 mod allowlist;
+mod config;
 mod gitignore;
 mod strategy;
+use config::Config;
 use strategy::{ProcessContext, RemovalStrategy};
 
 /// Move the specified file to the system trash.
@@ -25,8 +27,24 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+
+    // Load configuration
+    let config = match Config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("safecmd: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Check if current directory is allowed
+    if !config.is_current_dir_allowed() {
+        eprintln!("safecmd: current directory is not in the allowed directories list");
+        std::process::exit(1);
+    }
+
     let mut exit_code = 0;
-    let context = ProcessContext::new(args);
+    let context = ProcessContext::new(args, config);
 
     for path in &context.args.path {
         if let Err(msg) = process_path(path, &context) {
@@ -39,7 +57,15 @@ fn main() {
 }
 
 fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
-    // 1. First check if file exists (considering -f flag)
+    // 1. Check if path is in allowed directories
+    if !context.config.is_path_allowed(path) {
+        return Err(format!(
+            "safecmd: cannot remove '{}': path is not in allowed directories",
+            path.display()
+        ));
+    }
+
+    // 2. Check if file exists (considering -f flag)
     if !path.exists() {
         if context.args.force {
             // With -f flag, silently succeed for non-existent files
@@ -52,17 +78,12 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
         }
     }
 
-    // 2. Protection checks (only for existing files)
-    // Priority: .denysafecmd > .allowsafecmd > .gitignore
+    // 3. Protection checks (only for existing files)
+    // Priority: config.toml > .allowsafecmd > .gitignore
 
-    // TODO: Check .denysafecmd first (highest priority)
-    // if context.denylist_checker.is_denied(path) {
-    //     return Err(format!("safecmd: cannot remove '{}': protected by .denysafecmd", path.display()));
-    // }
-
-    // 3. Check gitignore protection
+    // 4. Check gitignore protection
     if context.gitignore_checker.is_ignored(path) {
-        // 4. Check if explicitly allowed by .allowsafecmd
+        // 5. Check if explicitly allowed by .allowsafecmd
         if !context.allowlist_checker.is_allowed(path) {
             let path_type = if path.is_dir() { "directory" } else { "file" };
             return Err(format!(
@@ -73,7 +94,7 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
         }
     }
 
-    // 5. Proceed with removal
+    // 6. Proceed with removal
     let strategy = determine_strategy(path, context)?;
     strategy.validate(path, context)?;
     strategy.execute(path, context)
