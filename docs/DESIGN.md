@@ -57,17 +57,18 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
 
 #### 保護機能の優先順位
 
-優先順位: `.denysafecmd` > `.allowsafecmd` > `.gitignore`
+優先順位: `safecmd.toml` (実行許可ディレクトリ) > `.allowsafecmd` > `.gitignore`
 
-- 🚧 **`.denysafecmd` - 削除禁止リスト（最優先）**
-  - 削除を禁止するパターンを設定
-  - システムファイルや重要なファイルの保護に使用
-  - 他の全ての設定より優先される
+- 🚧 **`safecmd.toml` - 実行許可ディレクトリ設定（最優先）**
+  - safecmdの実行を許可するディレクトリを設定
+  - このファイルに定義されたディレクトリ配下でのみsafecmdを実行可能
+  - 許可外ディレクトリでの実行時は即座にエラー
+  - 全ての設定に優先される最重要の安全機能
 
 - 🚧 **`.allowsafecmd` - 削除許可リスト（第2優先）**
   - 削除を許可するパターンを設定
   - `.gitignore`で保護されているファイルも削除可能にする
-  - ただし`.denysafecmd`の設定には勝てない
+  - `safecmd.toml`で許可されたディレクトリ内でのみ有効
 
 - ✅ **`.gitignore` - デフォルト保護（第3優先）**
   - `.gitignore`に記述されたファイル/ディレクトリはデフォルトで削除不可
@@ -78,7 +79,7 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
 ### 3.3 拡張機能
 
 - 🚧 **保護設定ファイル**
-  - `.denysafecmd`ファイルによる削除禁止リスト
+  - `safecmd.toml`による実行許可ディレクトリ設定
   - `.allowsafecmd`ファイルによる削除許可リスト
 
 ## 4. 技術仕様
@@ -127,18 +128,20 @@ safecmd -r build temp
 
 ### 4.4 設定ファイル形式
 
-#### 削除禁止リスト (`.denysafecmd`)
+#### 実行許可ディレクトリ設定 (`safecmd.toml`)
 
-```
-# .gitignoreと同じ記述方法で削除を禁止するパターンを記述
-# システムファイルや重要なファイルを保護するために使用
-*.key
-*.pem
-.env*
-/etc/*
-/usr/*
-/bin/*
-/sbin/*
+```toml
+# safecmdの実行を許可するディレクトリを設定
+# このファイルはホームディレクトリやシステムの設定ディレクトリに配置
+# 例: ~/.config/safecmd/safecmd.toml
+
+[allowed_directories]
+# 絶対パスで許可するディレクトリを列挙
+paths = [
+    "/home/user/projects",
+    "/home/user/tmp",
+    "/var/tmp/safecmd-workspace",
+]
 ```
 
 #### 削除許可リスト (`.allowsafecmd`)
