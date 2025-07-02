@@ -57,7 +57,10 @@ fn empty_directory_with_d_flag() {
         .success();
 
     // directory should no longer exist
-    assert!(!dir_path.exists(), "directory still exists at original path");
+    assert!(
+        !dir_path.exists(),
+        "directory still exists at original path"
+    );
 }
 
 #[test]
@@ -78,7 +81,10 @@ fn non_empty_directory_with_d_flag_fails() {
         .stderr(predicates::str::contains("Directory not empty"));
 
     // directory should still exist
-    assert!(dir_path.exists(), "non-empty directory was removed with -d flag");
+    assert!(
+        dir_path.exists(),
+        "non-empty directory was removed with -d flag"
+    );
 }
 
 #[test]
@@ -87,11 +93,11 @@ fn directory_with_r_flag() {
     let temp_dir = tempdir().expect("create tmp dir");
     let dir_path = temp_dir.path().join("dir_with_files");
     fs::create_dir(&dir_path).expect("create directory");
-    
+
     // create files inside the directory
     File::create(dir_path.join("file1.txt")).expect("create file1");
     File::create(dir_path.join("file2.txt")).expect("create file2");
-    
+
     // create subdirectory with file
     let sub_dir = dir_path.join("subdir");
     fs::create_dir(&sub_dir).expect("create subdirectory");
@@ -106,7 +112,10 @@ fn directory_with_r_flag() {
         .success();
 
     // directory should no longer exist
-    assert!(!dir_path.exists(), "directory still exists at original path");
+    assert!(
+        !dir_path.exists(),
+        "directory still exists at original path"
+    );
 }
 
 #[test]
@@ -202,7 +211,10 @@ fn combined_flags_df() {
         .assert()
         .success();
 
-    assert!(!empty_dir.exists(), "empty directory was not removed with -df");
+    assert!(
+        !empty_dir.exists(),
+        "empty directory was not removed with -df"
+    );
 }
 
 #[test]
@@ -229,7 +241,7 @@ fn combined_flags_frd() {
     let temp_dir = tempdir().expect("create tmp dir");
     let existing_dir = temp_dir.path().join("existing");
     fs::create_dir(&existing_dir).expect("create directory");
-    
+
     Command::cargo_bin("safecmd")
         .expect("binary exists")
         .arg("-frd")
@@ -238,5 +250,8 @@ fn combined_flags_frd() {
         .assert()
         .success();
 
-    assert!(!existing_dir.exists(), "directory was not removed with -frd");
+    assert!(
+        !existing_dir.exists(),
+        "directory was not removed with -frd"
+    );
 }
