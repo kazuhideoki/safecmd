@@ -9,9 +9,13 @@ SafeCmd is a safety-focused replacement for the `rm` command written in Rust. It
 ## Development Commands
 
 **Essential commands for development:**
+
 ```bash
 # Check code compiles
 cargo check
+
+# format code
+cargo fmt
 
 # Run linter (must pass with no warnings)
 cargo clippy -- -D warnings
@@ -30,13 +34,16 @@ cargo run -- [arguments]
 ```
 
 **Important**: After making any code changes, you MUST run all three quality checks in order:
+
 1. `cargo check`
-2. `cargo clippy -- -D warnings`
-3. `cargo test`
+2. `cargo fmt`
+3. `cargo clippy -- -D warnings`
+4. `cargo test`
 
 ## Architecture
 
 The codebase follows a simple CLI architecture:
+
 - `src/main.rs`: Entry point with argument parsing using `clap`
 - Uses the `trash` crate for safe file deletion (moves to system trash)
 - Integration tests in `tests/` verify trash functionality
@@ -56,6 +63,7 @@ The codebase follows a simple CLI architecture:
 ## Future Development Areas
 
 Based on `docs/DESIGN.md`, the project has extensive planned features including:
+
 - Configuration system (`safecmd.toml`)
 - Protection lists for important files
 - Integration with `.gitignore` and `.allowsafecmd`

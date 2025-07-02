@@ -8,41 +8,96 @@ impl GitignoreChecker {
         Self
     }
 
-    fn get_gitignore_for_path(&self, path: &Path) -> Option<Gitignore> {
+    fn get_gitignore_for_path(&self, path: &Path) -> Option<(Gitignore, std::path::PathBuf)> {
         let cwd = std::env::current_dir().ok()?;
-        let mut builder = GitignoreBuilder::new(&cwd);
-        
-        // Get the directory containing the path
-        let start_dir = if path.is_absolute() {
-            path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| path.to_path_buf())
+
+        // Convert to absolute path if necessary
+        let abs_path = if path.is_absolute() {
+            path.to_path_buf()
         } else {
-            let full_path = cwd.join(path);
-            full_path.parent().map(|p| p.to_path_buf()).unwrap_or(cwd.clone())
+            cwd.join(path)
         };
-        
-        // Walk up directory tree looking for .gitignore files
-        let mut current_dir = start_dir;
+
+        // Get the directory containing the path
+        let start_dir = abs_path.parent()?.to_path_buf();
+
+        // Walk up directory tree collecting .gitignore paths
+        let mut current_dir = start_dir.clone();
+        let mut gitignore_paths = Vec::new();
+        let mut outermost_gitignore_dir = None;
+
         loop {
             let gitignore_path = current_dir.join(".gitignore");
             if gitignore_path.exists() {
-                if let Some(e) = builder.add(&gitignore_path) {
-                    eprintln!("Warning: Failed to parse .gitignore at {}: {}", gitignore_path.display(), e);
-                }
+                gitignore_paths.push(gitignore_path);
+                outermost_gitignore_dir = Some(current_dir.clone());
             }
-            
+
             if !current_dir.pop() {
                 break;
             }
         }
-        
-        builder.build().ok()
+
+        if let Some(root) = outermost_gitignore_dir {
+            let mut builder = GitignoreBuilder::new(&root);
+
+            // Add gitignore files in reverse order (from root to local)
+            for gitignore_path in gitignore_paths.into_iter().rev() {
+                if let Some(e) = builder.add(&gitignore_path) {
+                    eprintln!(
+                        "Warning: Failed to parse .gitignore at {}: {}",
+                        gitignore_path.display(),
+                        e
+                    );
+                }
+            }
+
+            builder.build().ok().map(|gi| (gi, root))
+        } else {
+            None
+        }
     }
-    
+
     pub fn is_ignored(&self, path: &Path) -> bool {
-        if let Some(gitignore) = self.get_gitignore_for_path(path) {
-            // For gitignore matching, we need to use relative paths from the gitignore location
-            let is_dir = path.is_dir();
-            gitignore.matched(path, is_dir).is_ignore()
+        if let Some((gitignore, gitignore_root)) = self.get_gitignore_for_path(path) {
+            let cwd = match std::env::current_dir() {
+                Ok(cwd) => cwd,
+                Err(_) => return false,
+            };
+
+            // Convert to absolute path
+            let abs_path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                cwd.join(path)
+            };
+
+            // Get relative path from the gitignore root
+            if let Ok(rel_path) = abs_path.strip_prefix(&gitignore_root) {
+                let is_dir = abs_path.is_dir();
+
+                // Check if the path itself is ignored
+                if gitignore.matched(rel_path, is_dir).is_ignore() {
+                    return true;
+                }
+
+                // For files, also check if any parent directory is ignored
+                if !is_dir {
+                    let mut current = rel_path;
+                    while let Some(parent) = current.parent() {
+                        if !parent.as_os_str().is_empty()
+                            && gitignore.matched(parent, true).is_ignore()
+                        {
+                            return true;
+                        }
+                        current = parent;
+                    }
+                }
+
+                false
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -71,7 +126,7 @@ mod tests {
         fs::create_dir(temp_path.join("test_dir")).unwrap();
 
         let checker = GitignoreChecker::new();
-        
+
         // Without .gitignore files, nothing should be ignored
         assert!(!checker.is_ignored(&temp_path.join("test.txt")));
         assert!(!checker.is_ignored(&temp_path.join("test_dir")));
@@ -98,7 +153,7 @@ mod tests {
         assert!(checker.is_ignored(&temp_path.join("app.log")));
         assert!(checker.is_ignored(&temp_path.join("secret.txt")));
         assert!(checker.is_ignored(&temp_path.join("target")));
-        
+
         // Check non-ignored files
         assert!(!checker.is_ignored(&temp_path.join("normal.txt")));
         assert!(!checker.is_ignored(&temp_path.join("src")));
@@ -108,14 +163,14 @@ mod tests {
     fn test_gitignore_in_parent_directory() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create parent .gitignore
         fs::write(temp_path.join(".gitignore"), "*.secret\n").unwrap();
-        
+
         // Create subdirectory
         let sub_dir = temp_path.join("subdir");
         fs::create_dir(&sub_dir).unwrap();
-        
+
         // Create test files in subdirectory
         fs::write(sub_dir.join("data.secret"), "secret data").unwrap();
         fs::write(sub_dir.join("data.txt"), "normal data").unwrap();
@@ -131,15 +186,15 @@ mod tests {
     fn test_nested_gitignore_files() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create parent .gitignore
         fs::write(temp_path.join(".gitignore"), "*.log\n").unwrap();
-        
+
         // Create subdirectory with its own .gitignore
         let sub_dir = temp_path.join("subdir");
         fs::create_dir(&sub_dir).unwrap();
         fs::write(sub_dir.join(".gitignore"), "*.secret\n").unwrap();
-        
+
         // Create test files
         fs::write(sub_dir.join("app.log"), "log").unwrap();
         fs::write(sub_dir.join("data.secret"), "secret").unwrap();
@@ -176,7 +231,7 @@ mod tests {
 
         // Create .gitignore with directory patterns
         fs::write(temp_path.join(".gitignore"), "build/\n*.tmp/\n").unwrap();
-        
+
         // Create directories
         fs::create_dir(temp_path.join("build")).unwrap();
         fs::create_dir(temp_path.join("cache.tmp")).unwrap();
@@ -197,7 +252,7 @@ mod tests {
 
         // Create .gitignore with potentially problematic patterns
         fs::write(temp_path.join(".gitignore"), "valid.txt\n[invalid\n*.log\n").unwrap();
-        
+
         // Create test files
         fs::write(temp_path.join("valid.txt"), "content").unwrap();
         fs::write(temp_path.join("test.log"), "log").unwrap();
@@ -207,5 +262,36 @@ mod tests {
         // Should still handle valid patterns despite malformed ones
         assert!(checker.is_ignored(&temp_path.join("valid.txt")));
         assert!(checker.is_ignored(&temp_path.join("test.log")));
+    }
+
+    #[test]
+    fn test_files_in_ignored_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create .gitignore that ignores entire directories
+        fs::write(temp_path.join(".gitignore"), "build/\ndist/\n").unwrap();
+
+        // Create ignored directories with files
+        fs::create_dir(temp_path.join("build")).unwrap();
+        fs::write(temp_path.join("build/output.bin"), "binary").unwrap();
+        fs::write(temp_path.join("build/debug.log"), "log").unwrap();
+
+        fs::create_dir(temp_path.join("dist")).unwrap();
+        fs::write(temp_path.join("dist/app.js"), "code").unwrap();
+
+        // Create non-ignored directory with file
+        fs::create_dir(temp_path.join("src")).unwrap();
+        fs::write(temp_path.join("src/main.rs"), "source").unwrap();
+
+        let checker = GitignoreChecker::new();
+
+        // Files in ignored directories should be ignored
+        assert!(checker.is_ignored(&temp_path.join("build/output.bin")));
+        assert!(checker.is_ignored(&temp_path.join("build/debug.log")));
+        assert!(checker.is_ignored(&temp_path.join("dist/app.js")));
+
+        // Files in non-ignored directories should not be ignored
+        assert!(!checker.is_ignored(&temp_path.join("src/main.rs")));
     }
 }

@@ -1,4 +1,4 @@
-use crate::{gitignore::GitignoreChecker, Args};
+use crate::{Args, gitignore::GitignoreChecker};
 use std::path::Path;
 
 pub trait RemovalStrategy {
