@@ -23,14 +23,17 @@ impl Default for Config {
 
 impl Config {
     pub fn load() -> Result<Self, String> {
-        // Check if running in test mode
-        if std::env::var("SAFECMD_TEST_MODE").is_ok() {
-            // Return a config that allows all paths for testing
-            return Ok(Self {
-                allowed_directories: AllowedDirectories {
-                    paths: vec![PathBuf::from("/")],
-                },
-            });
+        // Check if test mode should be disabled
+        if std::env::var("SAFECMD_DISABLE_TEST_MODE").is_err() {
+            // Check if running in test mode by looking for cargo test environment
+            if std::env::var("CARGO_MANIFEST_DIR").is_ok() && std::env::var("CARGO").is_ok() {
+                // Return a config that allows all paths for testing
+                return Ok(Self {
+                    allowed_directories: AllowedDirectories {
+                        paths: vec![PathBuf::from("/")],
+                    },
+                });
+            }
         }
 
         let config_path = Self::config_path()?;
@@ -89,6 +92,11 @@ impl Config {
     }
 
     fn config_path() -> Result<PathBuf, String> {
+        // Check for environment variable override
+        if let Ok(path) = std::env::var("SAFECMD_CONFIG_PATH") {
+            return Ok(PathBuf::from(path));
+        }
+
         let home_dir =
             dirs::home_dir().ok_or_else(|| "Could not determine home directory".to_string())?;
 
