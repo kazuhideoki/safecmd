@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
+mod allowlist;
 mod gitignore;
 mod strategy;
 use strategy::{ProcessContext, RemovalStrategy};
@@ -38,23 +39,43 @@ fn main() {
 }
 
 fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
-    // Check if path is protected by .gitignore (except for non-existent files with -f flag)
-    if (!context.args.force || path.exists()) && context.gitignore_checker.is_ignored(path) {
-        let path_type = if path.is_dir() { "directory" } else { "file" };
-        return Err(format!(
-            "safecmd: cannot remove '{}': {} is protected by .gitignore",
-            path.display(),
-            path_type
-        ));
+    // 1. First check if file exists (considering -f flag)
+    if !path.exists() {
+        if context.args.force {
+            // With -f flag, silently succeed for non-existent files
+            return Ok(());
+        } else {
+            return Err(format!(
+                "safecmd: cannot remove '{}': No such file or directory",
+                path.display()
+            ));
+        }
     }
 
-    // Determine strategy based on path type and flags
+    // 2. Protection checks (only for existing files)
+    // Priority: .denysafecmd > .allowsafecmd > .gitignore
+
+    // TODO: Check .denysafecmd first (highest priority)
+    // if context.denylist_checker.is_denied(path) {
+    //     return Err(format!("safecmd: cannot remove '{}': protected by .denysafecmd", path.display()));
+    // }
+
+    // 3. Check gitignore protection
+    if context.gitignore_checker.is_ignored(path) {
+        // 4. Check if explicitly allowed by .allowsafecmd
+        if !context.allowlist_checker.is_allowed(path) {
+            let path_type = if path.is_dir() { "directory" } else { "file" };
+            return Err(format!(
+                "safecmd: cannot remove '{}': {} is protected by .gitignore",
+                path.display(),
+                path_type
+            ));
+        }
+    }
+
+    // 5. Proceed with removal
     let strategy = determine_strategy(path, context)?;
-
-    // Validate the operation
     strategy.validate(path, context)?;
-
-    // Execute the removal
     strategy.execute(path, context)
 }
 
