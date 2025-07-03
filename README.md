@@ -1,6 +1,6 @@
 # safecmd
 
-Safe commands for rm, cp, mv.
+Safe replacement for the `rm` command that moves files to the system trash instead of permanently deleting them.
 
 ## Features
 
@@ -22,6 +22,7 @@ safecmd [OPTIONS] <PATH>...
 - `-d`  Allow removing empty directories
 - `-f`  Force removal, ignore non-existent files
 - `-r`  Remove directories recursively
+- `-v`  Verbose mode - display each file as it's moved to trash (planned)
 
 ### Examples
 

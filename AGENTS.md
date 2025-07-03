@@ -5,6 +5,7 @@ After making changes to the repository, run the following commands:
 
 ```
 cargo check
+cargo fmt
 cargo clippy -- -D warnings
 cargo test
 ```

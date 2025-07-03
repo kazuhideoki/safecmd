@@ -54,6 +54,10 @@ The codebase follows a simple CLI architecture:
 2. **rm Compatibility**: Aims to be a drop-in replacement for `rm` with compatible flags
 3. **Error Handling**: Comprehensive error messages to prevent user confusion
 
+## Planned Features
+
+- `-v` (verbose) flag: Display each file as it's moved to trash
+
 ## Testing Strategy
 
 - TDD を t-wada の方法で実践すること
