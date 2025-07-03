@@ -29,7 +29,7 @@ paths = ["{}"]
     fs::write(temp_path.join("disallowed.txt"), "disallowed").unwrap();
 
     // Test: allowed directory - should succeed
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&allowed_dir)
@@ -40,7 +40,7 @@ paths = ["{}"]
     assert!(!allowed_dir.join("test.txt").exists());
 
     // Test: disallowed directory - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(temp_path)
@@ -80,7 +80,7 @@ paths = ["{}"]
     fs::write(subproject_dir.join("file.txt"), "content").unwrap();
 
     // Test: subdirectory of allowed directory - should succeed
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&subproject_dir)
@@ -120,7 +120,7 @@ paths = ["{}", "{}"]
     fs::write(dir2.join("file2.txt"), "content2").unwrap();
 
     // Test both directories
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&dir1)
@@ -130,7 +130,7 @@ paths = ["{}", "{}"]
 
     assert!(!dir1.join("file1.txt").exists());
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&dir2)
@@ -169,7 +169,7 @@ paths = ["{}"]
     fs::write(&disallowed_file, "secret").unwrap();
 
     // Test: try to delete file outside allowed directory using absolute path
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&allowed_dir)
@@ -201,7 +201,7 @@ paths = []
     fs::write(temp_path.join("file.txt"), "content").unwrap();
 
     // Test: empty allowed directories - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(temp_path)
@@ -223,7 +223,7 @@ fn test_config_creation_error_message() {
     let config_path = temp_path.join("nonexistent").join("config.toml");
 
     // Test: config file doesn't exist and can't be created - should show error
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(temp_path)
@@ -273,7 +273,7 @@ paths = ["{}"]
     fs::write(symlink_dir.join("file.txt"), "content").unwrap();
 
     // Test: accessing through symlink when real path is allowed - should succeed
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&symlink_dir)
@@ -310,7 +310,7 @@ paths = ["{}"]
     fs::write(subdir.join("file2.txt"), "content2").unwrap();
 
     // Test: simple relative path
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&allowed_dir)
@@ -322,7 +322,7 @@ paths = ["{}"]
 
     // Test: relative path with ./
     fs::write(allowed_dir.join("file3.txt"), "content3").unwrap();
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&allowed_dir)
@@ -333,7 +333,7 @@ paths = ["{}"]
     assert!(!allowed_dir.join("file3.txt").exists());
 
     // Test: relative path to subdirectory
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&allowed_dir)
@@ -370,7 +370,7 @@ paths = ["{}"]
     fs::write(&config_path, config_content).unwrap();
 
     // Test: try to access parent directory file with ../
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&subdir)
@@ -385,7 +385,7 @@ paths = ["{}"]
 
     // But accessing files within allowed directory via .. should work
     fs::write(allowed_dir.join("allowed_file.txt"), "content").unwrap();
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&subdir)
@@ -424,7 +424,7 @@ paths = ["{}"]
     fs::write(subdir2.join("target.txt"), "target").unwrap();
 
     // Test: complex path like ./subdir1/../root_file.txt
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&allowed_dir)
@@ -435,7 +435,7 @@ paths = ["{}"]
     assert!(!allowed_dir.join("root_file.txt").exists());
 
     // Test: accessing sibling directory from subdirectory
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&subdir1)
@@ -471,7 +471,7 @@ paths = ["{}"]
     fs::write(deep_subdir.join("deep_file.txt"), "deep").unwrap();
 
     // Test: relative path from deep subdirectory
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&deep_subdir)
@@ -509,7 +509,7 @@ paths = ["{}"]
     fs::write(&allowed_file, "allowed").unwrap();
 
     // Test: try to delete allowed file from disallowed directory
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&disallowed_dir)

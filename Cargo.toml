@@ -3,6 +3,14 @@ name = "safecmd"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "rm"
+path = "src/bin/rm.rs"
+
+[[bin]]
+name = "cp"
+path = "src/bin/cp.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 dirs = "5"

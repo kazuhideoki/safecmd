@@ -104,6 +104,12 @@ impl AllowlistChecker {
     }
 }
 
+impl Default for AllowlistChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,30 +1,11 @@
 use clap::Parser;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-mod allowlist;
-mod config;
-mod gitignore;
-mod strategy;
-use config::Config;
-use strategy::{ProcessContext, RemovalStrategy};
+use safecmd::args::Args;
+use safecmd::config::Config;
+use safecmd::strategy::{ProcessContext, RemovalStrategy};
 
-/// Move the specified file to the system trash.
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Allow removing empty directories
-    #[arg(short = 'd')]
-    allow_dir: bool,
-    /// Force removal without prompting, ignore non-existent files
-    #[arg(short = 'f')]
-    force: bool,
-    /// Recursively remove directories
-    #[arg(short = 'r')]
-    recursive: bool,
-    /// Paths to files or directories to trash
-    path: Vec<PathBuf>,
-}
-
+/// Safe replacement for the `rm` command.
 fn main() {
     let args = Args::parse();
 
@@ -32,7 +13,7 @@ fn main() {
     let config = match Config::load() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("safecmd: {}", e);
+            eprintln!("safecmd: {e}");
             std::process::exit(1);
         }
     };
@@ -104,7 +85,7 @@ fn determine_strategy(
     path: &Path,
     context: &ProcessContext,
 ) -> Result<Box<dyn RemovalStrategy>, String> {
-    use strategy::*;
+    use safecmd::strategy::*;
 
     match std::fs::metadata(path) {
         Ok(meta) => {
@@ -125,9 +106,8 @@ fn determine_strategy(
                 Ok(Box::new(NonExistentFileStrategy))
             } else {
                 Err(format!(
-                    "safecmd: cannot remove '{}': {}",
-                    path.display(),
-                    e
+                    "safecmd: cannot remove '{}': {e}",
+                    path.display()
                 ))
             }
         }

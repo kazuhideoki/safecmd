@@ -104,6 +104,12 @@ impl GitignoreChecker {
     }
 }
 
+impl Default for GitignoreChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

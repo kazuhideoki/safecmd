@@ -18,7 +18,7 @@ fn test_allowlist_overrides_gitignore() {
     fs::write(temp_path.join("debug.log"), "debug content").unwrap();
     fs::write(temp_path.join("error.log"), "error content").unwrap();
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // debug.log should be removable (allowed by .allowsafecmd)
     cmd.arg(temp_path.join("debug.log")).assert().success();
@@ -26,7 +26,7 @@ fn test_allowlist_overrides_gitignore() {
     // Verify file was removed
     assert!(!temp_path.join("debug.log").exists());
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // error.log should still be protected (not in .allowsafecmd)
     cmd.arg(temp_path.join("error.log"))
@@ -53,7 +53,7 @@ fn test_allowlist_directory_pattern() {
     fs::create_dir(temp_path.join("build")).unwrap();
     fs::write(temp_path.join("build/output.bin"), "binary").unwrap();
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // build directory should be removable with -r flag
     cmd.arg("-r")
@@ -81,14 +81,14 @@ fn test_allowlist_wildcard_patterns() {
     fs::write(temp_path.join("data.tmp"), "data").unwrap();
     fs::write(temp_path.join("index.cache"), "index").unwrap();
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // cache.tmp should be removable (explicitly allowed)
     cmd.arg(temp_path.join("cache.tmp")).assert().success();
 
     assert!(!temp_path.join("cache.tmp").exists());
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // data.tmp should be protected (not in allowlist)
     cmd.arg(temp_path.join("data.tmp"))
@@ -98,7 +98,7 @@ fn test_allowlist_wildcard_patterns() {
 
     assert!(temp_path.join("data.tmp").exists());
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // index.cache should be removable (matches *.cache pattern)
     cmd.arg(temp_path.join("index.cache")).assert().success();
@@ -129,20 +129,20 @@ fn test_nested_allowlist_files() {
     fs::write(sub_dir.join("data.secret"), "data").unwrap();
     fs::write(sub_dir.join("key.secret"), "key").unwrap();
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // Both test.secret and data.secret should be removable
     cmd.arg(sub_dir.join("test.secret")).assert().success();
 
     assert!(!sub_dir.join("test.secret").exists());
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     cmd.arg(sub_dir.join("data.secret")).assert().success();
 
     assert!(!sub_dir.join("data.secret").exists());
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // key.secret should still be protected
     cmd.arg(sub_dir.join("key.secret"))
@@ -164,7 +164,7 @@ fn test_allowlist_without_gitignore() {
     // Create test file
     fs::write(temp_path.join("app.log"), "log").unwrap();
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // File should be removable (no gitignore protection)
     cmd.arg(temp_path.join("app.log")).assert().success();
@@ -192,7 +192,7 @@ fn test_allowlist_files_in_gitignored_directory() {
     fs::create_dir(&node_modules).unwrap();
     fs::write(node_modules.join("package.json"), "{}").unwrap();
 
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     // Files in allowed directory should be removable
     cmd.arg(node_modules.join("package.json"))
@@ -202,7 +202,7 @@ fn test_allowlist_files_in_gitignored_directory() {
     assert!(!node_modules.join("package.json").exists());
 
     // Directory itself should also be removable with -r
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
 
     cmd.arg("-r").arg(&node_modules).assert().success();
 
