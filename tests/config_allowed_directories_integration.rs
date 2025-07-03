@@ -283,3 +283,243 @@ paths = ["{}"]
 
     assert!(!symlink_dir.join("file.txt").exists());
 }
+
+#[test]
+fn test_relative_paths_within_allowed_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let allowed_dir = temp_path.join("allowed");
+    let subdir = allowed_dir.join("subdir");
+    fs::create_dir_all(&subdir).unwrap();
+
+    let config_dir = temp_path.join(".config");
+    fs::create_dir(&config_dir).unwrap();
+
+    let config_path = config_dir.join("config.toml");
+    let config_content = format!(
+        r#"[allowed_directories]
+paths = ["{}"]
+"#,
+        allowed_dir.display()
+    );
+    fs::write(&config_path, config_content).unwrap();
+
+    // Create test files
+    fs::write(allowed_dir.join("file1.txt"), "content1").unwrap();
+    fs::write(subdir.join("file2.txt"), "content2").unwrap();
+
+    // Test: simple relative path
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&allowed_dir)
+        .arg("file1.txt")
+        .assert()
+        .success();
+
+    assert!(!allowed_dir.join("file1.txt").exists());
+
+    // Test: relative path with ./
+    fs::write(allowed_dir.join("file3.txt"), "content3").unwrap();
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&allowed_dir)
+        .arg("./file3.txt")
+        .assert()
+        .success();
+
+    assert!(!allowed_dir.join("file3.txt").exists());
+
+    // Test: relative path to subdirectory
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&allowed_dir)
+        .arg("subdir/file2.txt")
+        .assert()
+        .success();
+
+    assert!(!subdir.join("file2.txt").exists());
+}
+
+#[test]
+fn test_relative_paths_to_parent_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let allowed_dir = temp_path.join("allowed");
+    let subdir = allowed_dir.join("subdir");
+    fs::create_dir_all(&subdir).unwrap();
+
+    // Create file outside allowed directory
+    let outside_file = temp_path.join("outside.txt");
+    fs::write(&outside_file, "secret").unwrap();
+
+    let config_dir = temp_path.join(".config");
+    fs::create_dir(&config_dir).unwrap();
+
+    let config_path = config_dir.join("config.toml");
+    let config_content = format!(
+        r#"[allowed_directories]
+paths = ["{}"]
+"#,
+        allowed_dir.display()
+    );
+    fs::write(&config_path, config_content).unwrap();
+
+    // Test: try to access parent directory file with ../
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&subdir)
+        .arg("../../outside.txt")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "path is not in allowed directories",
+        ));
+
+    assert!(outside_file.exists());
+
+    // But accessing files within allowed directory via .. should work
+    fs::write(allowed_dir.join("allowed_file.txt"), "content").unwrap();
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&subdir)
+        .arg("../allowed_file.txt")
+        .assert()
+        .success();
+
+    assert!(!allowed_dir.join("allowed_file.txt").exists());
+}
+
+#[test]
+fn test_complex_relative_paths() {
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let allowed_dir = temp_path.join("allowed");
+    let subdir1 = allowed_dir.join("subdir1");
+    let subdir2 = allowed_dir.join("subdir2");
+    fs::create_dir_all(&subdir1).unwrap();
+    fs::create_dir_all(&subdir2).unwrap();
+
+    let config_dir = temp_path.join(".config");
+    fs::create_dir(&config_dir).unwrap();
+
+    let config_path = config_dir.join("config.toml");
+    let config_content = format!(
+        r#"[allowed_directories]
+paths = ["{}"]
+"#,
+        allowed_dir.display()
+    );
+    fs::write(&config_path, config_content).unwrap();
+
+    // Create test files
+    fs::write(allowed_dir.join("root_file.txt"), "root").unwrap();
+    fs::write(subdir2.join("target.txt"), "target").unwrap();
+
+    // Test: complex path like ./subdir1/../root_file.txt
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&allowed_dir)
+        .arg("./subdir1/../root_file.txt")
+        .assert()
+        .success();
+
+    assert!(!allowed_dir.join("root_file.txt").exists());
+
+    // Test: accessing sibling directory from subdirectory
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&subdir1)
+        .arg("../subdir2/target.txt")
+        .assert()
+        .success();
+
+    assert!(!subdir2.join("target.txt").exists());
+}
+
+#[test]
+fn test_relative_paths_from_subdirectory() {
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let allowed_dir = temp_path.join("allowed");
+    let deep_subdir = allowed_dir.join("level1").join("level2");
+    fs::create_dir_all(&deep_subdir).unwrap();
+
+    let config_dir = temp_path.join(".config");
+    fs::create_dir(&config_dir).unwrap();
+
+    let config_path = config_dir.join("config.toml");
+    let config_content = format!(
+        r#"[allowed_directories]
+paths = ["{}"]
+"#,
+        allowed_dir.display()
+    );
+    fs::write(&config_path, config_content).unwrap();
+
+    // Create test file in deep subdirectory
+    fs::write(deep_subdir.join("deep_file.txt"), "deep").unwrap();
+
+    // Test: relative path from deep subdirectory
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&deep_subdir)
+        .arg("deep_file.txt")
+        .assert()
+        .success();
+
+    assert!(!deep_subdir.join("deep_file.txt").exists());
+}
+
+#[test]
+fn test_disallowed_current_directory_with_allowed_target() {
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let allowed_dir = temp_path.join("allowed");
+    let disallowed_dir = temp_path.join("disallowed");
+    fs::create_dir(&allowed_dir).unwrap();
+    fs::create_dir(&disallowed_dir).unwrap();
+
+    let config_dir = temp_path.join(".config");
+    fs::create_dir(&config_dir).unwrap();
+
+    let config_path = config_dir.join("config.toml");
+    let config_content = format!(
+        r#"[allowed_directories]
+paths = ["{}"]
+"#,
+        allowed_dir.display()
+    );
+    fs::write(&config_path, config_content).unwrap();
+
+    // Create test file in allowed directory
+    let allowed_file = allowed_dir.join("allowed.txt");
+    fs::write(&allowed_file, "allowed").unwrap();
+
+    // Test: try to delete allowed file from disallowed directory
+    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&disallowed_dir)
+        .arg(&allowed_file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "current directory is not in the allowed directories list",
+        ));
+
+    // File should still exist because command was rejected early
+    assert!(allowed_file.exists());
+}
