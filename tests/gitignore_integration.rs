@@ -22,7 +22,7 @@ fn test_gitignore_prevents_deletion() {
     fs::write(temp_path.join("regular.txt"), "regular data").unwrap();
 
     // Test: Try to delete a gitignored file - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("important.txt")
         .assert()
@@ -30,7 +30,7 @@ fn test_gitignore_prevents_deletion() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Try to delete a gitignored pattern - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("app.log")
         .assert()
@@ -38,7 +38,7 @@ fn test_gitignore_prevents_deletion() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Try to delete a gitignored directory - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("-r")
         .arg("build")
@@ -47,7 +47,7 @@ fn test_gitignore_prevents_deletion() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Even with -f flag, gitignored files should not be deleted
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("-f")
         .arg("important.txt")
@@ -56,7 +56,7 @@ fn test_gitignore_prevents_deletion() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Regular file can be deleted
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("regular.txt")
         .assert()
@@ -93,7 +93,7 @@ fn test_gitignore_prevents_deletion_of_files_in_ignored_directory() {
     fs::write(temp_path.join("src/main.rs"), "source code").unwrap();
 
     // Test: Try to delete a file inside gitignored directory - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("build/output.bin")
         .assert()
@@ -101,7 +101,7 @@ fn test_gitignore_prevents_deletion_of_files_in_ignored_directory() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Try to delete another file in gitignored directory - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("build/debug.log")
         .assert()
@@ -109,7 +109,7 @@ fn test_gitignore_prevents_deletion_of_files_in_ignored_directory() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Try to delete file in different gitignored directory - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("cache/temp.dat")
         .assert()
@@ -117,7 +117,7 @@ fn test_gitignore_prevents_deletion_of_files_in_ignored_directory() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Even with -f flag, files in gitignored directories should not be deleted
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("-f")
         .arg("build/output.bin")
@@ -126,7 +126,7 @@ fn test_gitignore_prevents_deletion_of_files_in_ignored_directory() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: File in non-ignored directory can be deleted
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("src/main.rs")
         .assert()
@@ -154,7 +154,7 @@ fn test_gitignore_with_nested_directories() {
     fs::write(temp_path.join("secrets/deep/key.pem"), "key").unwrap();
 
     // Test: Try to delete gitignored nested directory
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("-r")
         .arg("secrets")
@@ -185,7 +185,7 @@ fn test_gitignore_respects_parent_directory() {
     fs::write(subdir.join("data.txt"), "normal data").unwrap();
 
     // Test: Parent .gitignore should be respected
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&subdir)
         .arg("data.secret")
         .assert()
@@ -193,7 +193,7 @@ fn test_gitignore_respects_parent_directory() {
         .stderr(predicate::str::contains("protected by .gitignore"));
 
     // Test: Non-gitignored file can be deleted
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&subdir).arg("data.txt").assert().success();
 
     // Verify results

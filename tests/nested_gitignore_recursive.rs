@@ -22,7 +22,7 @@ fn test_recursive_deletion_respects_nested_gitignore() {
     fs::write(temp_path.join("allowed/some_dir/file1.txt"), "content1").unwrap();
 
     // Test: Try to recursively delete a subdirectory of gitignored directory - should fail
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("-r")
         .arg("dist/some_dir")
@@ -36,7 +36,7 @@ fn test_recursive_deletion_respects_nested_gitignore() {
     assert!(temp_path.join("dist/some_dir/file2.txt").exists());
 
     // Test: Non-ignored directory can be deleted
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("-r")
         .arg("allowed/some_dir")
@@ -63,7 +63,7 @@ fn test_recursive_deletion_checks_all_contents() {
 
     // Test: Try to recursively delete the project directory - should fail
     // because it contains gitignored content
-    let mut cmd = Command::cargo_bin("safecmd").unwrap();
+    let mut cmd = Command::cargo_bin("rm").unwrap();
     cmd.current_dir(&temp_path)
         .arg("-r")
         .arg("project")

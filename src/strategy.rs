@@ -1,4 +1,4 @@
-use crate::{Args, allowlist::AllowlistChecker, config::Config, gitignore::GitignoreChecker};
+use crate::{args::Args, allowlist::AllowlistChecker, config::Config, gitignore::GitignoreChecker};
 use std::path::Path;
 
 pub trait RemovalStrategy {

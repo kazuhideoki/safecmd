@@ -50,10 +50,10 @@ impl Config {
         }
 
         let content = fs::read_to_string(&config_path)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
+            .map_err(|e| format!("Failed to read config file: {e}"))?;
 
         let config: Config =
-            toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {}", e))?;
+            toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))?;
 
         Ok(config)
     }
@@ -202,7 +202,7 @@ impl Config {
     fn create_default_config(config_path: &Path) -> Result<(), String> {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create config directory: {}", e))?;
+                .map_err(|e| format!("Failed to create config directory: {e}"))?;
         }
 
         let default_content = r#"# SafeCmd configuration file
@@ -217,10 +217,10 @@ paths = [
 "#;
 
         let mut file = fs::File::create(config_path)
-            .map_err(|e| format!("Failed to create config file: {}", e))?;
+            .map_err(|e| format!("Failed to create config file: {e}"))?;
 
         file.write_all(default_content.as_bytes())
-            .map_err(|e| format!("Failed to write default config: {}", e))?;
+            .map_err(|e| format!("Failed to write default config: {e}"))?;
 
         Err(format!(
             "Created default configuration file at: {}\nPlease add allowed directories to the config file and try again.",
