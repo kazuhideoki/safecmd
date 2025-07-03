@@ -105,10 +105,7 @@ fn determine_strategy(
             if context.args.force && e.kind() == std::io::ErrorKind::NotFound {
                 Ok(Box::new(NonExistentFileStrategy))
             } else {
-                Err(format!(
-                    "safecmd: cannot remove '{}': {e}",
-                    path.display()
-                ))
+                Err(format!("safecmd: cannot remove '{}': {e}", path.display()))
             }
         }
     }

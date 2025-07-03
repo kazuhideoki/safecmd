@@ -1,4 +1,4 @@
-use crate::{args::Args, allowlist::AllowlistChecker, config::Config, gitignore::GitignoreChecker};
+use crate::{allowlist::AllowlistChecker, args::Args, config::Config, gitignore::GitignoreChecker};
 use std::path::Path;
 
 pub trait RemovalStrategy {
@@ -15,11 +15,12 @@ pub struct ProcessContext {
 
 impl ProcessContext {
     pub fn new(args: Args, config: Config) -> Self {
+        let allowlist_checker = AllowlistChecker::with_config(&config);
         Self {
             args,
             config,
             gitignore_checker: GitignoreChecker::new(),
-            allowlist_checker: AllowlistChecker::new(),
+            allowlist_checker,
         }
     }
 }

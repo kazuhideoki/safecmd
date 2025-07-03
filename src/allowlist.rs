@@ -1,11 +1,31 @@
+use crate::config::Config;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::path::Path;
 
-pub struct AllowlistChecker;
+pub struct AllowlistChecker {
+    config_patterns: Option<Gitignore>,
+}
 
 impl AllowlistChecker {
     pub fn new() -> Self {
-        Self
+        Self {
+            config_patterns: None,
+        }
+    }
+
+    pub fn with_config(config: &Config) -> Self {
+        let config_patterns = if !config.allowed_gitignores.patterns.is_empty() {
+            // Use root "/" as the base directory for config patterns
+            let mut builder = GitignoreBuilder::new("/");
+            for pattern in &config.allowed_gitignores.patterns {
+                let _ = builder.add_line(None, pattern);
+            }
+            builder.build().ok()
+        } else {
+            None
+        };
+
+        Self { config_patterns }
     }
 
     fn get_allowlist_for_path(&self, path: &Path) -> Option<(Gitignore, std::path::PathBuf)> {
@@ -59,23 +79,75 @@ impl AllowlistChecker {
     }
 
     pub fn is_allowed(&self, path: &Path) -> bool {
+        let cwd = match std::env::current_dir() {
+            Ok(cwd) => cwd,
+            Err(_) => return false,
+        };
+
+        // Convert to absolute path
+        let abs_path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            cwd.join(path)
+        };
+
+        let is_dir = abs_path.is_dir();
+
+        // First check config patterns
+        if let Some(ref config_patterns) = self.config_patterns {
+            // For config patterns, create a simple relative path from filename
+            if let Some(file_name) = abs_path.file_name() {
+                let file_name_path = Path::new(file_name);
+
+                // Check the pattern match
+                if config_patterns.matched(file_name_path, is_dir).is_ignore() {
+                    return true;
+                }
+
+                // For directories, also check with trailing slash
+                if is_dir {
+                    let mut dir_name_with_slash = file_name.to_os_string();
+                    dir_name_with_slash.push("/");
+                    if config_patterns
+                        .matched(Path::new(&dir_name_with_slash), true)
+                        .is_ignore()
+                    {
+                        return true;
+                    }
+                }
+            }
+            
+            // For files, check if any parent directory is allowed by config patterns
+            if !is_dir {
+                let mut current = abs_path.as_path();
+                while let Some(parent) = current.parent() {
+                    if let Some(parent_name) = parent.file_name() {
+                        let parent_name_path = Path::new(parent_name);
+                        
+                        // Check if parent directory matches pattern
+                        if config_patterns.matched(parent_name_path, true).is_ignore() {
+                            return true;
+                        }
+                        
+                        // Also check with trailing slash
+                        let mut parent_name_with_slash = parent_name.to_os_string();
+                        parent_name_with_slash.push("/");
+                        if config_patterns
+                            .matched(Path::new(&parent_name_with_slash), true)
+                            .is_ignore()
+                        {
+                            return true;
+                        }
+                    }
+                    current = parent;
+                }
+            }
+        }
+
+        // Then check local .allowsafecmd files
         if let Some((allowlist, allowlist_root)) = self.get_allowlist_for_path(path) {
-            let cwd = match std::env::current_dir() {
-                Ok(cwd) => cwd,
-                Err(_) => return false,
-            };
-
-            // Convert to absolute path
-            let abs_path = if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                cwd.join(path)
-            };
-
             // Get relative path from the allowlist root
             if let Ok(rel_path) = abs_path.strip_prefix(&allowlist_root) {
-                let is_dir = abs_path.is_dir();
-
                 // Check if the path itself is matched (allowed)
                 if allowlist.matched(rel_path, is_dir).is_ignore() {
                     return true;
@@ -93,14 +165,10 @@ impl AllowlistChecker {
                         current = parent;
                     }
                 }
-
-                false
-            } else {
-                false
             }
-        } else {
-            false
         }
+
+        false
     }
 }
 
@@ -113,6 +181,7 @@ impl Default for AllowlistChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{AllowedDirectories, AllowedGitignores};
     use std::fs;
     use tempfile::TempDir;
 
@@ -120,6 +189,51 @@ mod tests {
     fn test_new_creates_allowlist_checker() {
         let _checker = AllowlistChecker::new();
         // Should create successfully without panic
+    }
+
+    #[test]
+    fn test_with_config_creates_allowlist_checker() {
+        let config = Config {
+            allowed_directories: AllowedDirectories { paths: vec![] },
+            allowed_gitignores: AllowedGitignores {
+                patterns: vec!["*.log".to_string(), "*.cache".to_string()],
+            },
+        };
+        let _checker = AllowlistChecker::with_config(&config);
+        // Should create successfully without panic
+    }
+
+    #[test]
+    fn test_config_patterns_match_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create config with patterns
+        let config = Config {
+            allowed_directories: AllowedDirectories { paths: vec![] },
+            allowed_gitignores: AllowedGitignores {
+                patterns: vec![
+                    "*.log".to_string(),
+                    "*.cache".to_string(),
+                    "build/".to_string(),
+                ],
+            },
+        };
+        let checker = AllowlistChecker::with_config(&config);
+
+        // Create test files
+        fs::write(temp_path.join("app.log"), "log").unwrap();
+        fs::write(temp_path.join("data.cache"), "cache").unwrap();
+        fs::write(temp_path.join("normal.txt"), "text").unwrap();
+        fs::create_dir(temp_path.join("build")).unwrap();
+        fs::create_dir(temp_path.join("src")).unwrap();
+
+        // Test pattern matching
+        assert!(checker.is_allowed(&temp_path.join("app.log")));
+        assert!(checker.is_allowed(&temp_path.join("data.cache")));
+        assert!(checker.is_allowed(&temp_path.join("build")));
+        assert!(!checker.is_allowed(&temp_path.join("normal.txt")));
+        assert!(!checker.is_allowed(&temp_path.join("src")));
     }
 
     #[test]
