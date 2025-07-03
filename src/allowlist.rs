@@ -15,10 +15,16 @@ impl AllowlistChecker {
 
     pub fn with_config(config: &Config) -> Self {
         let config_patterns = if !config.allowed_gitignores.patterns.is_empty() {
-            // Use root "/" as the base directory for config patterns
-            let mut builder = GitignoreBuilder::new("/");
+            // Config patterns are relative to current directory
+            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let mut builder = GitignoreBuilder::new(&cwd);
             for pattern in &config.allowed_gitignores.patterns {
-                let _ = builder.add_line(None, pattern);
+                if let Err(e) = builder.add_line(None, pattern) {
+                    eprintln!(
+                        "Warning: Invalid pattern '{}' in config.toml allowed_gitignores: {}",
+                        pattern, e
+                    );
+                }
             }
             builder.build().ok()
         } else {
@@ -95,51 +101,24 @@ impl AllowlistChecker {
 
         // First check config patterns
         if let Some(ref config_patterns) = self.config_patterns {
-            // For config patterns, create a simple relative path from filename
-            if let Some(file_name) = abs_path.file_name() {
-                let file_name_path = Path::new(file_name);
-
-                // Check the pattern match
-                if config_patterns.matched(file_name_path, is_dir).is_ignore() {
+            // Config patterns are relative to current directory
+            if let Ok(rel_path) = abs_path.strip_prefix(&cwd) {
+                // Check if the path itself matches
+                if config_patterns.matched(rel_path, is_dir).is_ignore() {
                     return true;
                 }
 
-                // For directories, also check with trailing slash
-                if is_dir {
-                    let mut dir_name_with_slash = file_name.to_os_string();
-                    dir_name_with_slash.push("/");
-                    if config_patterns
-                        .matched(Path::new(&dir_name_with_slash), true)
-                        .is_ignore()
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            // For files, check if any parent directory is allowed by config patterns
-            if !is_dir {
-                let mut current = abs_path.as_path();
-                while let Some(parent) = current.parent() {
-                    if let Some(parent_name) = parent.file_name() {
-                        let parent_name_path = Path::new(parent_name);
-
-                        // Check if parent directory matches pattern
-                        if config_patterns.matched(parent_name_path, true).is_ignore() {
-                            return true;
-                        }
-
-                        // Also check with trailing slash
-                        let mut parent_name_with_slash = parent_name.to_os_string();
-                        parent_name_with_slash.push("/");
-                        if config_patterns
-                            .matched(Path::new(&parent_name_with_slash), true)
-                            .is_ignore()
+                // For files, also check if any parent directory is allowed
+                if !is_dir {
+                    let mut current = rel_path;
+                    while let Some(parent) = current.parent() {
+                        if !parent.as_os_str().is_empty()
+                            && config_patterns.matched(parent, true).is_ignore()
                         {
                             return true;
                         }
+                        current = parent;
                     }
-                    current = parent;
                 }
             }
         }
@@ -208,6 +187,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
 
+        // Change to temp directory for proper relative path testing
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&temp_path).unwrap();
+
         // Create config with patterns
         let config = Config {
             allowed_directories: AllowedDirectories { paths: vec![] },
@@ -222,18 +205,21 @@ mod tests {
         let checker = AllowlistChecker::with_config(&config);
 
         // Create test files
-        fs::write(temp_path.join("app.log"), "log").unwrap();
-        fs::write(temp_path.join("data.cache"), "cache").unwrap();
-        fs::write(temp_path.join("normal.txt"), "text").unwrap();
-        fs::create_dir(temp_path.join("build")).unwrap();
-        fs::create_dir(temp_path.join("src")).unwrap();
+        fs::write("app.log", "log").unwrap();
+        fs::write("data.cache", "cache").unwrap();
+        fs::write("normal.txt", "text").unwrap();
+        fs::create_dir("build").unwrap();
+        fs::create_dir("src").unwrap();
 
         // Test pattern matching
-        assert!(checker.is_allowed(&temp_path.join("app.log")));
-        assert!(checker.is_allowed(&temp_path.join("data.cache")));
-        assert!(checker.is_allowed(&temp_path.join("build")));
-        assert!(!checker.is_allowed(&temp_path.join("normal.txt")));
-        assert!(!checker.is_allowed(&temp_path.join("src")));
+        assert!(checker.is_allowed(Path::new("app.log")));
+        assert!(checker.is_allowed(Path::new("data.cache")));
+        assert!(checker.is_allowed(Path::new("build")));
+        assert!(!checker.is_allowed(Path::new("normal.txt")));
+        assert!(!checker.is_allowed(Path::new("src")));
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
     }
 
     #[test]

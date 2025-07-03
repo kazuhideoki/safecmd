@@ -210,3 +210,103 @@ patterns = []
     // File should still exist
     assert!(allowed_dir.join("app.log").exists());
 }
+
+#[test]
+fn test_path_based_patterns() {
+    let temp_dir = TempDir::new().unwrap();
+    let allowed_dir = temp_dir.path();
+
+    // Create config file with path-based patterns
+    let config_path = allowed_dir.join("config.toml");
+    let config_content = format!(
+        r#"
+[allowed_directories]
+paths = ["{allowed}"]
+
+[allowed_gitignores]
+patterns = [
+    "src/*.log",      # .log files only in src directory
+    "**/*.cache",     # .cache files at any depth
+    "test/build/",    # build directory only under test
+]
+"#,
+        allowed = allowed_dir.display()
+    );
+    fs::write(&config_path, config_content).unwrap();
+
+    // Create directory structure
+    fs::create_dir_all(allowed_dir.join("src")).unwrap();
+    fs::create_dir_all(allowed_dir.join("lib")).unwrap();
+    fs::create_dir_all(allowed_dir.join("test/build")).unwrap();
+    fs::create_dir_all(allowed_dir.join("other/build")).unwrap();
+    fs::create_dir_all(allowed_dir.join("deep/nested/path")).unwrap();
+
+    // Create test files
+    fs::write(allowed_dir.join("src/app.log"), "log").unwrap();
+    fs::write(allowed_dir.join("lib/app.log"), "log").unwrap();
+    fs::write(allowed_dir.join("data.cache"), "cache").unwrap();
+    fs::write(allowed_dir.join("deep/nested/path/data.cache"), "cache").unwrap();
+
+    // Create .gitignore that protects all these files
+    let gitignore_content = "*.log\n*.cache\nbuild/\n";
+    fs::write(allowed_dir.join(".gitignore"), gitignore_content).unwrap();
+
+    // Files matching path-based patterns should be removable
+
+    // src/*.log should match only in src directory
+    let mut cmd = Command::cargo_bin("rm").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .current_dir(&allowed_dir)
+        .arg("src/app.log")
+        .assert()
+        .success();
+    assert!(!allowed_dir.join("src/app.log").exists());
+
+    // lib/app.log should be protected (doesn't match src/*.log)
+    let mut cmd = Command::cargo_bin("rm").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .current_dir(&allowed_dir)
+        .arg("lib/app.log")
+        .assert()
+        .failure()
+        .stderr(contains("protected by .gitignore"));
+    assert!(allowed_dir.join("lib/app.log").exists());
+
+    // **/*.cache should match at any depth
+    let mut cmd = Command::cargo_bin("rm").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .current_dir(&allowed_dir)
+        .arg("data.cache")
+        .assert()
+        .success();
+    assert!(!allowed_dir.join("data.cache").exists());
+
+    let mut cmd = Command::cargo_bin("rm").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .current_dir(&allowed_dir)
+        .arg("deep/nested/path/data.cache")
+        .assert()
+        .success();
+    assert!(!allowed_dir.join("deep/nested/path/data.cache").exists());
+
+    // test/build/ should match only under test
+    let mut cmd = Command::cargo_bin("rm").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .current_dir(&allowed_dir)
+        .arg("-r")
+        .arg("test/build")
+        .assert()
+        .success();
+    assert!(!allowed_dir.join("test/build").exists());
+
+    // other/build/ should be protected
+    let mut cmd = Command::cargo_bin("rm").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .current_dir(&allowed_dir)
+        .arg("-r")
+        .arg("other/build")
+        .assert()
+        .failure()
+        .stderr(contains("protected by .gitignore"));
+    assert!(allowed_dir.join("other/build").exists());
+}

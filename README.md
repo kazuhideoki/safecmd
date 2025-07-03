@@ -59,18 +59,45 @@ paths = [
     "/home/user/tmp",
     "/Users/yourname/Documents",
 ]
+
+# Global patterns to allow deletion even if protected by .gitignore
+[allowed_gitignores]
+patterns = [
+    # Glob patterns (like .gitignore syntax)
+    "*.log",           # All .log files in any directory
+    "*.cache",         # All .cache files
+    "node_modules/",   # node_modules directories
+    "build/",          # build directories
+    "__pycache__/",    # Python cache directories
+    "dist/*",          # All files in dist directories
+    "src/*.tmp",       # .tmp files only in src directories
+    "**/*.bak",        # .bak files at any depth
+]
 ```
 
 ### Security Model
 
 1. **Execution restriction**: The `rm` command can only run in directories listed in `config.toml`
 2. **File protection priority**: 
-   - `config.toml` (execution allowed) → `.allowsafecmd` (deletion allowed) → `.gitignore` (deletion denied)
+   - `config.toml` `allowed_gitignores` patterns (globally allowed)
+   - `.allowsafecmd` files (locally allowed, overrides `.gitignore`)
+   - `.gitignore` files (protected by default)
 
 ### Protection Files
 
 - **`.gitignore`**: Files/directories matching patterns are protected from deletion
-- **`.allowsafecmd`**: Overrides `.gitignore` protection for specific patterns (same syntax as `.gitignore`)
+- **`.allowsafecmd`**: Overrides `.gitignore` protection for specific patterns locally (same syntax as `.gitignore`)
+- **`config.toml` `allowed_gitignores`**: Global patterns that override `.gitignore` protection across all directories
+
+### Pattern Matching
+
+Patterns in `allowed_gitignores` follow standard gitignore syntax:
+- Patterns are relative to the current working directory
+- `*.ext` matches files with that extension in any directory
+- `dir/` matches directories named "dir"
+- `dir/*.ext` matches files with that extension only in "dir"
+- `**/file` matches "file" at any depth
+- Files within allowed directories are automatically allowed
 
 Example `.allowsafecmd`:
 ```
