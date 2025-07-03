@@ -14,7 +14,7 @@ Safe replacement for the `rm` command that moves files to the system trash inste
 ## Usage
 
 ```bash
-safecmd [OPTIONS] <PATH>...
+rm [OPTIONS] <PATH>...
 ```
 
 ### Options
@@ -28,27 +28,27 @@ safecmd [OPTIONS] <PATH>...
 
 ```bash
 # Remove an empty directory
-safecmd -d empty_dir
+rm -d empty_dir
 # Remove a directory and its contents recursively
-safecmd -r dir file.txt
+rm -r dir file.txt
 
 # Force removal, ignore if files don't exist
-safecmd -f non_existent.txt existing.txt
+rm -f non_existent.txt existing.txt
 
 # .gitignore protected files cannot be deleted
-safecmd build/output.bin  # Error if build/ is in .gitignore
+rm build/output.bin  # Error if build/ is in .gitignore
 
 # Recursive deletion also checks all contents
-safecmd -r dist/  # Error if any file inside is protected
+rm -r dist/  # Error if any file inside is protected
 
 # Unless explicitly allowed in .allowsafecmd
 echo "build/" > .allowsafecmd
-safecmd -r build/  # Now allowed
+rm -r build/  # Now allowed
 ```
 
 ## Configuration
 
-SafeCmd requires a configuration file at `~/.config/safecmd/config.toml` to specify allowed execution directories. The file is automatically created on first run.
+The `rm` command (from safecmd package) requires a configuration file at `~/.config/safecmd/config.toml` to specify allowed execution directories. The file is automatically created on first run.
 
 ### Configuration Format
 
@@ -63,7 +63,7 @@ paths = [
 
 ### Security Model
 
-1. **Execution restriction**: SafeCmd can only run in directories listed in `config.toml`
+1. **Execution restriction**: The `rm` command can only run in directories listed in `config.toml`
 2. **File protection priority**: 
    - `config.toml` (execution allowed) → `.allowsafecmd` (deletion allowed) → `.gitignore` (deletion denied)
 

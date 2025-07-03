@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SafeCmd is a safety-focused replacement for the `rm` command written in Rust. It moves files to the system trash instead of permanently deleting them, preventing accidental data loss.
+SafeCmd is a safety-focused package written in Rust that provides safe replacements for dangerous commands. The `rm` binary moves files to the system trash instead of permanently deleting them, preventing accidental data loss.
 
 ## Development Commands
 
@@ -29,8 +29,8 @@ cargo test --test trash_integration
 # Build the project
 cargo build
 
-# Run the binary
-cargo run -- [arguments]
+# Run the rm binary
+cargo run --bin rm -- [arguments]
 ```
 
 **Important**: After making any code changes, you MUST run all three quality checks in order:
@@ -44,7 +44,7 @@ cargo run -- [arguments]
 
 The codebase follows a simple CLI architecture:
 
-- `src/main.rs`: Entry point with argument parsing using `clap`
+- `src/bin/rm.rs`: Entry point for the `rm` binary with argument parsing using `clap`
 - Uses the `trash` crate for safe file deletion (moves to system trash)
 - Integration tests in `tests/` verify trash functionality
 

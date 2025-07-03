@@ -116,19 +116,19 @@ impl AllowlistChecker {
                     }
                 }
             }
-            
+
             // For files, check if any parent directory is allowed by config patterns
             if !is_dir {
                 let mut current = abs_path.as_path();
                 while let Some(parent) = current.parent() {
                     if let Some(parent_name) = parent.file_name() {
                         let parent_name_path = Path::new(parent_name);
-                        
+
                         // Check if parent directory matches pattern
                         if config_patterns.matched(parent_name_path, true).is_ignore() {
                             return true;
                         }
-                        
+
                         // Also check with trailing slash
                         let mut parent_name_with_slash = parent_name.to_os_string();
                         parent_name_with_slash.push("/");

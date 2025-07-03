@@ -33,8 +33,7 @@ impl RemovalStrategy for FileStrategy {
     }
 
     fn execute(&self, path: &Path, _context: &ProcessContext) -> Result<(), String> {
-        trash::delete(path)
-            .map_err(|e| format!("safecmd: failed to remove '{}': {}", path.display(), e))
+        trash::delete(path).map_err(|e| format!("rm: failed to remove '{}': {}", path.display(), e))
     }
 }
 
@@ -47,8 +46,7 @@ impl RemovalStrategy for RecursiveDirectoryStrategy {
     }
 
     fn execute(&self, path: &Path, _context: &ProcessContext) -> Result<(), String> {
-        trash::delete(path)
-            .map_err(|e| format!("safecmd: failed to remove '{}': {}", path.display(), e))
+        trash::delete(path).map_err(|e| format!("rm: failed to remove '{}': {}", path.display(), e))
     }
 }
 
@@ -58,7 +56,7 @@ impl RecursiveDirectoryStrategy {
         if context.gitignore_checker.is_ignored(path) && !context.allowlist_checker.is_allowed(path)
         {
             return Err(format!(
-                "safecmd: cannot remove '{}': directory is protected by .gitignore",
+                "rm: cannot remove '{}': directory is protected by .gitignore",
                 path.display()
             ));
         }
@@ -81,7 +79,7 @@ impl RecursiveDirectoryStrategy {
                                     "file"
                                 };
                                 return Err(format!(
-                                    "safecmd: cannot remove '{}': contains {} '{}' protected by .gitignore",
+                                    "rm: cannot remove '{}': contains {} '{}' protected by .gitignore",
                                     path.display(),
                                     path_type,
                                     entry_path.display()
@@ -95,7 +93,7 @@ impl RecursiveDirectoryStrategy {
                         }
                         Err(e) => {
                             return Err(format!(
-                                "safecmd: error reading directory '{}': {}",
+                                "rm: error reading directory '{}': {}",
                                 path.display(),
                                 e
                             ));
@@ -104,11 +102,7 @@ impl RecursiveDirectoryStrategy {
                 }
                 Ok(())
             }
-            Err(e) => Err(format!(
-                "safecmd: cannot access '{}': {}",
-                path.display(),
-                e
-            )),
+            Err(e) => Err(format!("rm: cannot access '{}': {}", path.display(), e)),
         }
     }
 }
@@ -120,22 +114,17 @@ impl RemovalStrategy for EmptyDirectoryStrategy {
         match std::fs::read_dir(path) {
             Ok(mut entries) => {
                 if entries.next().is_some() {
-                    Err(format!("safecmd: {}: Directory not empty", path.display()))
+                    Err(format!("rm: {}: Directory not empty", path.display()))
                 } else {
                     Ok(())
                 }
             }
-            Err(e) => Err(format!(
-                "safecmd: cannot access '{}': {}",
-                path.display(),
-                e
-            )),
+            Err(e) => Err(format!("rm: cannot access '{}': {}", path.display(), e)),
         }
     }
 
     fn execute(&self, path: &Path, _context: &ProcessContext) -> Result<(), String> {
-        trash::delete(path)
-            .map_err(|e| format!("safecmd: failed to remove '{}': {}", path.display(), e))
+        trash::delete(path).map_err(|e| format!("rm: failed to remove '{}': {}", path.display(), e))
     }
 }
 
@@ -143,7 +132,7 @@ pub struct DirectoryErrorStrategy;
 
 impl RemovalStrategy for DirectoryErrorStrategy {
     fn validate(&self, path: &Path, _context: &ProcessContext) -> Result<(), String> {
-        Err(format!("safecmd: {}: is a directory", path.display()))
+        Err(format!("rm: {}: is a directory", path.display()))
     }
 
     fn execute(&self, _path: &Path, _context: &ProcessContext) -> Result<(), String> {

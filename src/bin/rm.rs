@@ -13,14 +13,14 @@ fn main() {
     let config = match Config::load() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("safecmd: {e}");
+            eprintln!("rm: {e}");
             std::process::exit(1);
         }
     };
 
     // Check if current directory is allowed
     if !config.is_current_dir_allowed() {
-        eprintln!("safecmd: current directory is not in the allowed directories list");
+        eprintln!("rm: current directory is not in the allowed directories list");
         std::process::exit(1);
     }
 
@@ -41,7 +41,7 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
     // 1. Check if path is in allowed directories
     if !context.config.is_path_allowed(path) {
         return Err(format!(
-            "safecmd: cannot remove '{}': path is not in allowed directories",
+            "rm: cannot remove '{}': path is not in allowed directories",
             path.display()
         ));
     }
@@ -53,7 +53,7 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
             return Ok(());
         } else {
             return Err(format!(
-                "safecmd: cannot remove '{}': No such file or directory",
+                "rm: cannot remove '{}': No such file or directory",
                 path.display()
             ));
         }
@@ -68,7 +68,7 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
         if !context.allowlist_checker.is_allowed(path) {
             let path_type = if path.is_dir() { "directory" } else { "file" };
             return Err(format!(
-                "safecmd: cannot remove '{}': {} is protected by .gitignore",
+                "rm: cannot remove '{}': {} is protected by .gitignore",
                 path.display(),
                 path_type
             ));
@@ -105,7 +105,7 @@ fn determine_strategy(
             if context.args.force && e.kind() == std::io::ErrorKind::NotFound {
                 Ok(Box::new(NonExistentFileStrategy))
             } else {
-                Err(format!("safecmd: cannot remove '{}': {e}", path.display()))
+                Err(format!("rm: cannot remove '{}': {e}", path.display()))
             }
         }
     }
