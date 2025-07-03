@@ -40,13 +40,75 @@ impl RemovalStrategy for FileStrategy {
 pub struct RecursiveDirectoryStrategy;
 
 impl RemovalStrategy for RecursiveDirectoryStrategy {
-    fn validate(&self, _path: &Path, _context: &ProcessContext) -> Result<(), String> {
-        Ok(())
+    fn validate(&self, path: &Path, context: &ProcessContext) -> Result<(), String> {
+        // Check if any file or directory within the target directory is protected by gitignore
+        Self::check_directory_recursively(path, context)
     }
 
     fn execute(&self, path: &Path, _context: &ProcessContext) -> Result<(), String> {
         trash::delete(path)
             .map_err(|e| format!("safecmd: failed to remove '{}': {}", path.display(), e))
+    }
+}
+
+impl RecursiveDirectoryStrategy {
+    fn check_directory_recursively(path: &Path, context: &ProcessContext) -> Result<(), String> {
+        // First check the directory itself
+        if context.gitignore_checker.is_ignored(path) && !context.allowlist_checker.is_allowed(path)
+        {
+            return Err(format!(
+                "safecmd: cannot remove '{}': directory is protected by .gitignore",
+                path.display()
+            ));
+        }
+
+        // Then check all contents recursively
+        match std::fs::read_dir(path) {
+            Ok(entries) => {
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => {
+                            let entry_path = entry.path();
+
+                            // Check if this entry is protected by gitignore
+                            if context.gitignore_checker.is_ignored(&entry_path)
+                                && !context.allowlist_checker.is_allowed(&entry_path)
+                            {
+                                let path_type = if entry_path.is_dir() {
+                                    "directory"
+                                } else {
+                                    "file"
+                                };
+                                return Err(format!(
+                                    "safecmd: cannot remove '{}': contains {} '{}' protected by .gitignore",
+                                    path.display(),
+                                    path_type,
+                                    entry_path.display()
+                                ));
+                            }
+
+                            // If it's a directory, check recursively
+                            if entry_path.is_dir() {
+                                Self::check_directory_recursively(&entry_path, context)?;
+                            }
+                        }
+                        Err(e) => {
+                            return Err(format!(
+                                "safecmd: error reading directory '{}': {}",
+                                path.display(),
+                                e
+                            ));
+                        }
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => Err(format!(
+                "safecmd: cannot access '{}': {}",
+                path.display(),
+                e
+            )),
+        }
     }
 }
 

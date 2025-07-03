@@ -23,7 +23,7 @@ impl Default for Config {
 
 impl Config {
     /// Loads the configuration from the TOML file.
-    /// 
+    ///
     /// # Behavior
     /// 1. In test mode (when CARGO_MANIFEST_DIR is set), allows all paths unless disabled
     /// 2. Uses SAFECMD_CONFIG_PATH environment variable if set
@@ -59,16 +59,16 @@ impl Config {
     }
 
     /// Checks if a given path is within the allowed directories.
-    /// 
+    ///
     /// # Security Features
     /// - Converts relative paths to absolute paths using the current directory
     /// - Canonicalizes paths to resolve symlinks and normalize ".." components
     /// - Prevents path traversal attacks (e.g., "../../etc/passwd")
     /// - Handles non-existent paths by resolving them based on current directory
-    /// 
+    ///
     /// # Arguments
     /// * `path` - The path to check (can be relative or absolute)
-    /// 
+    ///
     /// # Returns
     /// * `true` if the path is within any allowed directory
     /// * `false` if the path is outside all allowed directories or cannot be resolved
@@ -134,12 +134,12 @@ impl Config {
     }
 
     /// Checks if the current working directory is within allowed directories.
-    /// 
+    ///
     /// # Security Purpose
     /// This provides the first layer of defense - preventing safecmd from even
     /// running in directories that aren't explicitly allowed. This stops users
     /// from navigating to sensitive directories and using relative paths.
-    /// 
+    ///
     /// # Returns
     /// * `true` if current directory is within any allowed directory
     /// * `false` if current directory is outside all allowed directories
@@ -176,7 +176,7 @@ impl Config {
     }
 
     /// Determines the path to the configuration file.
-    /// 
+    ///
     /// # Priority
     /// 1. SAFECMD_CONFIG_PATH environment variable (for testing and custom setups)
     /// 2. ~/.config/safecmd/config.toml (default location)
@@ -195,7 +195,7 @@ impl Config {
     }
 
     /// Creates a default configuration file with helpful comments.
-    /// 
+    ///
     /// # Error Handling
     /// Always returns an error after creating the file to force the user
     /// to explicitly configure allowed directories before using safecmd.

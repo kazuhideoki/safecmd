@@ -56,6 +56,11 @@ The codebase follows a simple CLI architecture:
 
 ## Testing Strategy
 
+- TDD を t-wada の方法で実践すること
+  - 失敗するテストケースを書く
+  - 実行して 🔴 Red であることを確認する
+  - コードを修正する
+  - 実行して 🟢 Green であることを確認する
 - Integration tests use `tempfile` for isolated test environments
 - Tests verify files are actually moved to trash (XDG specification)
 - Use `assert_cmd` and `predicates` for CLI testing

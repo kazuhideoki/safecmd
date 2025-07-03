@@ -8,6 +8,7 @@ Safe commands for rm, cp, mv.
 - **rm compatibility**: Drop-in replacement for `rm` command
 - **Execution control**: Restricts execution to allowed directories via config file
 - **Protection**: Respects `.gitignore` patterns - prevents deletion of ignored files
+  - Recursive deletion (`-r`) checks all files and subdirectories for protection
 - **Override capability**: `.allowsafecmd` files can override `.gitignore` protection
 
 ## Usage
@@ -35,6 +36,9 @@ safecmd -f non_existent.txt existing.txt
 
 # .gitignore protected files cannot be deleted
 safecmd build/output.bin  # Error if build/ is in .gitignore
+
+# Recursive deletion also checks all contents
+safecmd -r dist/  # Error if any file inside is protected
 
 # Unless explicitly allowed in .allowsafecmd
 echo "build/" > .allowsafecmd

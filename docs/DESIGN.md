@@ -201,4 +201,6 @@ node_modules/
 
 ### 不具合
 
-- ネストされた .gitignore 設定のファイルが -r で削除できてしまう。削除できないべき 例: `safecmd -r dist/some_dir`
+- ~~ネストされた .gitignore 設定のファイルが -r で削除できてしまう。削除できないべき 例: `safecmd -r dist/some_dir`~~ (修正済み: v0.1.0)
+  - `RecursiveDirectoryStrategy`に再帰的なgitignoreチェックを追加
+  - ディレクトリ削除前に内部のすべてのファイル・サブディレクトリの保護状態を確認
