@@ -41,12 +41,11 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
 
 将来実装予定：
 
-- `-v`: 削除（ゴミ箱への移動）したファイルを表示
+- `--dry-run`: 実際に削除せずに動作を確認
 
 ### 3.2 安全機能
 
 #### 保護機能の優先順位
-
 
 - ✅ **`config.toml` - 実行許可ディレクトリ設定（最優先）**
   - safecmdの実行を許可するディレクトリを設定
@@ -87,7 +86,7 @@ safecmd [OPTIONS] [FILES...]
   -d              空のディレクトリのみ削除
   -f              ファイルが存在しない場合もエラーを出さない
   -r              ディレクトリを再帰的に削除
-  -v              削除したファイルを表示 (予定)
+  --dry-run       実際に削除せずに動作を確認 (予定)
   --version       バージョン情報を表示
   --help          ヘルプを表示
 ```
@@ -126,7 +125,7 @@ paths = [
 - 現在のディレクトリおよび削除対象パスの両方をチェック
 
 ```
-
+!
 ## 5. テスト戦略
 
 - ✅ 統合テスト: `trash` crateとの連携テスト
@@ -159,20 +158,26 @@ paths = [
   config.toml
 
 ```
+
 patterns = [
-    # Example: "*.log",
-    # Example: "*.cache",
-    # Example: "node_modules/",
-    # Example: "build/",
-    # Example: "__pycache__/",
-    "workspace",
-    "dist/",
-    "node_modules/",
+# Example: "*.log",
+# Example: "*.cache",
+# Example: "node_modules/",
+# Example: "build/",
+# Example: "__pycache__/",
+"workspace",
+"dist/",
+"node_modules/",
 ]
+
 ```
 
 log
 
 ```
+
 rm -r node_modules/
+
+```
+
 ```
