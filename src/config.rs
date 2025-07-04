@@ -85,6 +85,10 @@ impl Config {
     /// * `true` if the path is within any allowed directory
     /// * `false` if the path is outside all allowed directories or cannot be resolved
     pub fn is_path_allowed(&self, path: &Path) -> bool {
+        // Check if directory restrictions are disabled via environment variable
+        if std::env::var("SAFECMD_DISABLE_ALLOWED_DIRECTORIES").is_ok() {
+            return true;
+        }
         // First, convert the path to absolute and try to canonicalize it
         let absolute_path = if path.is_absolute() {
             // For absolute paths: canonicalize if exists to resolve symlinks,
@@ -156,6 +160,10 @@ impl Config {
     /// * `true` if current directory is within any allowed directory
     /// * `false` if current directory is outside all allowed directories
     pub fn is_current_dir_allowed(&self) -> bool {
+        // Check if directory restrictions are disabled via environment variable
+        if std::env::var("SAFECMD_DISABLE_ALLOWED_DIRECTORIES").is_ok() {
+            return true;
+        }
         match std::env::current_dir() {
             Ok(cwd) => {
                 // Canonicalize to handle cases where we're in a symlinked directory

@@ -42,6 +42,7 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
 - ✅ 複数ファイルの一括削除
 
 将来実装予定：
+
 - `-v`: 削除（ゴミ箱への移動）したファイルを表示
 
 ### 3.2 安全機能
@@ -181,3 +182,27 @@ node_modules/
 - ~~ネストされた .gitignore 設定のファイルが -r で削除できてしまう。削除できないべき 例: `safecmd -r dist/some_dir`~~ (修正済み: v0.1.0)
   - `RecursiveDirectoryStrategy`に再帰的なgitignoreチェックを追加
   - ディレクトリ削除前に内部のすべてのファイル・サブディレクトリの保護状態を確認
+
+- config.tomlに指定したが削除できない。
+  config.toml
+
+```
+patterns = [
+    # Add gitignore-style patterns here
+    # Example: "*.log",
+    # Example: "*.cache",
+    # Example: "node_modules/",
+    # Example: "build/",
+    # Example: "__pycache__/",
+    "workspace",
+    "dist/",
+    "node_modules/",
+]
+```
+
+log
+
+```
+rm -r node_modules/
+rm: cannot remove 'node_modules/ocpp-base/node_modules/iconv-lite': contains directory 'node_modules/ocpp-base/node_modules/iconv-lite/.idea' protected by .gitignore
+```

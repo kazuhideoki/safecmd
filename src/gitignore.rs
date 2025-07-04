@@ -59,6 +59,11 @@ impl GitignoreChecker {
     }
 
     pub fn is_ignored(&self, path: &Path) -> bool {
+        // Check if gitignore checking is disabled via environment variable
+        if std::env::var("SAFECMD_DISABLE_GITIGNORES").is_ok() {
+            return false;
+        }
+
         if let Some((gitignore, gitignore_root)) = self.get_gitignore_for_path(path) {
             let cwd = match std::env::current_dir() {
                 Ok(cwd) => cwd,

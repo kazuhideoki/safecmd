@@ -1,6 +1,7 @@
 use assert_cmd::prelude::*;
 use predicates;
 use std::fs::{self, File};
+use std::io::Write;
 use std::process::Command;
 use tempfile::tempdir;
 
@@ -254,4 +255,87 @@ fn combined_flags_frd() {
         !existing_dir.exists(),
         "directory was not removed with -frd"
     );
+}
+
+#[test]
+fn disable_allowed_directories_env_var() {
+    // create a directory that is NOT in allowed_directories
+    let temp_dir = tempdir().expect("create tmp dir");
+    let file_path = temp_dir.path().join("test.txt");
+    File::create(&file_path).expect("create file");
+
+    // Without the environment variable, this should fail due to directory restriction
+    Command::cargo_bin("rm")
+        .expect("binary exists")
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .arg(&file_path)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains(
+            "path is not in allowed directories",
+        ));
+
+    // With SAFECMD_DISABLE_ALLOWED_DIRECTORIES=1, it should succeed
+    Command::cargo_bin("rm")
+        .expect("binary exists")
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .env("SAFECMD_DISABLE_ALLOWED_DIRECTORIES", "1")
+        .arg(&file_path)
+        .assert()
+        .success();
+
+    assert!(!file_path.exists(), "file was not removed");
+}
+
+#[test]
+fn disable_gitignores_env_var() {
+    // create a directory with a .gitignore file
+    let temp_dir = tempdir().expect("create tmp dir");
+
+    // create a config file that allows this directory
+    let config_dir = temp_dir.path().join(".config").join("safecmd");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    let config_path = config_dir.join("config.toml");
+    let mut config_file = File::create(&config_path).expect("create config file");
+    writeln!(
+        config_file,
+        r#"[allowed_directories]
+paths = ["{}"]
+"#,
+        temp_dir.path().display()
+    )
+    .expect("write config");
+
+    // create .gitignore file
+    let gitignore_path = temp_dir.path().join(".gitignore");
+    let mut gitignore = File::create(&gitignore_path).expect("create gitignore");
+    writeln!(gitignore, "ignored.txt").expect("write gitignore");
+
+    // create an ignored file
+    let ignored_file = temp_dir.path().join("ignored.txt");
+    File::create(&ignored_file).expect("create ignored file");
+
+    // Without the environment variable, this should fail due to gitignore protection
+    Command::cargo_bin("rm")
+        .expect("binary exists")
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .env("SAFECMD_CONFIG_PATH", config_path.display().to_string())
+        .current_dir(temp_dir.path())
+        .arg(&ignored_file)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("is protected by .gitignore"));
+
+    // With SAFECMD_DISABLE_GITIGNORES=1, it should succeed
+    Command::cargo_bin("rm")
+        .expect("binary exists")
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .env("SAFECMD_CONFIG_PATH", config_path.display().to_string())
+        .env("SAFECMD_DISABLE_GITIGNORES", "1")
+        .current_dir(temp_dir.path())
+        .arg(&ignored_file)
+        .assert()
+        .success();
+
+    assert!(!ignored_file.exists(), "ignored file was not removed");
 }
