@@ -59,21 +59,7 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
         }
     }
 
-    // 3. Protection checks (only for existing files)
-    // Priority: config.toml > .allowsafecmd > .gitignore
-
-    // 4. Check gitignore protection
-    if context.gitignore_checker.is_ignored(path) {
-        // 5. Check if explicitly allowed by .allowsafecmd
-        if !context.allowlist_checker.is_allowed(path) {
-            let path_type = if path.is_dir() { "directory" } else { "file" };
-            return Err(format!(
-                "rm: cannot remove '{}': {} is protected by .gitignore",
-                path.display(),
-                path_type
-            ));
-        }
-    }
+    // 3. Protection checks are not implemented
 
     // 6. Proceed with removal
     let strategy = determine_strategy(path, context)?;

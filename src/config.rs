@@ -6,8 +6,6 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub allowed_directories: AllowedDirectories,
-    #[serde(default)]
-    pub allowed_gitignores: AllowedGitignores,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,16 +13,10 @@ pub struct AllowedDirectories {
     pub paths: Vec<PathBuf>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct AllowedGitignores {
-    pub patterns: Vec<String>,
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {
             allowed_directories: AllowedDirectories { paths: vec![] },
-            allowed_gitignores: AllowedGitignores::default(),
         }
     }
 }
@@ -49,7 +41,6 @@ impl Config {
                         allowed_directories: AllowedDirectories {
                             paths: vec![PathBuf::from("/")],
                         },
-                        allowed_gitignores: AllowedGitignores::default(),
                     });
                 }
             }
@@ -235,17 +226,6 @@ paths = [
     # Example: "/Users/yourname/Documents",
 ]
 
-# Patterns to allow deletion even if protected by .gitignore
-# These patterns work in addition to local .allowsafecmd files
-[allowed_gitignores]
-patterns = [
-    # Add gitignore-style patterns here
-    # Example: "*.log",
-    # Example: "*.cache",
-    # Example: "node_modules/",
-    # Example: "build/",
-    # Example: "__pycache__/",
-]
 "#;
 
         let mut file = fs::File::create(config_path)
@@ -295,7 +275,6 @@ mod tests {
             allowed_directories: AllowedDirectories {
                 paths: vec![allowed_dir_canonical.clone()],
             },
-            allowed_gitignores: AllowedGitignores::default(),
         };
 
         // Test 1: Absolute path within allowed directory should be allowed
@@ -328,7 +307,6 @@ mod tests {
             allowed_directories: AllowedDirectories {
                 paths: vec![allowed_dir_canonical],
             },
-            allowed_gitignores: AllowedGitignores::default(),
         };
 
         // Change to allowed directory
@@ -373,7 +351,6 @@ mod tests {
             allowed_directories: AllowedDirectories {
                 paths: vec![allowed_dir_canonical],
             },
-            allowed_gitignores: AllowedGitignores::default(),
         };
 
         // Change to subdirectory
@@ -408,7 +385,6 @@ mod tests {
             allowed_directories: AllowedDirectories {
                 paths: vec![allowed_dir_canonical],
             },
-            allowed_gitignores: AllowedGitignores::default(),
         };
 
         // Change to allowed directory
@@ -444,7 +420,6 @@ mod tests {
             allowed_directories: AllowedDirectories {
                 paths: vec![allowed_dir_canonical.clone()],
             },
-            allowed_gitignores: AllowedGitignores::default(),
         };
 
         let original_dir = std::env::current_dir().unwrap();
@@ -472,7 +447,6 @@ mod tests {
         setup_test_env();
         let config = Config {
             allowed_directories: AllowedDirectories { paths: vec![] },
-            allowed_gitignores: AllowedGitignores::default(),
         };
 
         // Empty allowed directories should implement "deny by default" policy
