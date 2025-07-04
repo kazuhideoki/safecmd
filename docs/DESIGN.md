@@ -10,8 +10,6 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
 - ✅ **`-d`フラグ**: 空ディレクトリの削除
 - ✅ **`-f`フラグ**: 強制削除、存在しないファイルを無視
 - ✅ **`-r`フラグ**: 再帰的削除
-- ✅ **`.gitignore`対応**: gitignoreされたファイルの削除を防止
-- ✅ **`.allowsafecmd`対応**: gitignore保護を上書きする許可リスト
 - ✅ **`config.toml`対応**: 実行許可ディレクトリ設定
 
 ## 2. 設計思想
@@ -49,7 +47,6 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
 
 #### 保護機能の優先順位
 
-優先順位: `config.toml` (実行許可ディレクトリ) > `.allowsafecmd` > `.gitignore`
 
 - ✅ **`config.toml` - 実行許可ディレクトリ設定（最優先）**
   - safecmdの実行を許可するディレクトリを設定
@@ -59,22 +56,15 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
   - 配置場所: `~/.config/safecmd/config.toml`
   - 初回実行時に自動作成される
 
-- ✅ **`.allowsafecmd` - 削除許可リスト（第2優先）**
   - 削除を許可するパターンを設定
-  - `.gitignore`で保護されているファイルも削除可能にする
   - `config.toml`で許可されたディレクトリ内でのみ有効
 
-- ✅ **`.gitignore` - デフォルト保護（第3優先）**
-  - `.gitignore`に記述されたファイル/ディレクトリはデフォルトで削除不可
   - ディレクトリがignoreされている場合、その中のファイルも保護
-  - プロジェクトルートまでの全ての`.gitignore`ファイルを考慮
-  - `.allowsafecmd`で上書き可能
 
 ### 3.3 拡張機能
 
 - ✅ **保護設定ファイル**
   - `config.toml`による実行許可ディレクトリ設定
-  - `.allowsafecmd`ファイルによる削除許可リスト
 
 ## 4. 技術仕様
 
@@ -86,7 +76,6 @@ SafeCmdは、従来の`rm`コマンドの代替として設計された安全な
 
 - ✅ `trash` crate - Rustのクロスプラットフォームゴミ箱ライブラリ
 - ✅ `clap` - コマンドライン引数パーサー
-- ✅ `ignore` crate - .gitignoreパターンマッチング
 - ✅ 最小限の依存関係で実装
 
 ### 4.3 コマンドラインインターフェース
@@ -136,18 +125,6 @@ paths = [
 - 許可ディレクトリが未設定の場合はエラーメッセージを表示
 - 現在のディレクトリおよび削除対象パスの両方をチェック
 
-#### 削除許可リスト (`.allowsafecmd`)
-
-```
-# .gitignoreと同じ記述方法で削除を許可するパターンを記述
-# .gitignoreで保護されているファイルも、ここに記述すれば削除可能
-temp/*
-*.tmp
-*.log
-build/
-dist/
-node_modules/
-.cache/
 ```
 
 ## 5. テスト戦略
@@ -157,10 +134,7 @@ node_modules/
   - ディレクトリ削除のテスト (`-d`, `-r`)
   - 強制削除のテスト (`-f`)
   - エラーケースのテスト
-  - `.gitignore`保護機能のテスト
 - ✅ ユニットテスト: 各機能の個別テスト
-  - GitignoreCheckerの動作テスト
-  - 親ディレクトリの`.gitignore`継承テスト
 - ✅ 安全性テスト: 保護機能の動作確認
 - ✅ 設定ファイルテスト: テスト実行時は自動的に制限を回避
 
@@ -179,8 +153,6 @@ node_modules/
 
 ### 不具合
 
-- ~~ネストされた .gitignore 設定のファイルが -r で削除できてしまう。削除できないべき 例: `safecmd -r dist/some_dir`~~ (修正済み: v0.1.0)
-  - `RecursiveDirectoryStrategy`に再帰的なgitignoreチェックを追加
   - ディレクトリ削除前に内部のすべてのファイル・サブディレクトリの保護状態を確認
 
 - config.tomlに指定したが削除できない。
@@ -188,7 +160,6 @@ node_modules/
 
 ```
 patterns = [
-    # Add gitignore-style patterns here
     # Example: "*.log",
     # Example: "*.cache",
     # Example: "node_modules/",
@@ -204,5 +175,4 @@ log
 
 ```
 rm -r node_modules/
-rm: cannot remove 'node_modules/ocpp-base/node_modules/iconv-lite': contains directory 'node_modules/ocpp-base/node_modules/iconv-lite/.idea' protected by .gitignore
 ```
