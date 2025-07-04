@@ -1,3 +1,6 @@
-pub mod args;
 pub mod config;
-pub mod strategy;
+
+pub mod commands {
+    pub mod cp;
+    pub mod rm;
+}

@@ -1,4 +1,4 @@
-use crate::{args::Args, config::Config};
+use crate::{commands::rm::args::Args, config::Config};
 use std::path::Path;
 
 pub trait RemovalStrategy {

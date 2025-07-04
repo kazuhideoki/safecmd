@@ -1,3 +1,5 @@
+use safecmd::commands::cp;
+
 fn main() {
-    println!("hello world");
+    cp::run();
 }
