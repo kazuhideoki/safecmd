@@ -6,7 +6,7 @@ Safe replacement for the `rm` command that moves files to the system trash inste
 
 - **Safe deletion**: Moves files to system trash instead of permanent deletion
 - **rm compatibility**: Drop-in replacement for `rm` command
-- **Execution control**: Restricts execution to allowed directories via config file
+- **Execution control**: Allows operations in current directory tree and optionally in additional directories via config
 
 ## Usage
 
@@ -36,15 +36,15 @@ rm -f non_existent.txt existing.txt
 
 ## Configuration
 
-The `rm` command (from safecmd package) requires a configuration file at `~/.config/safecmd/config.toml` to specify allowed execution directories. The file is automatically created on first run.
+The `rm` command (from safecmd package) requires a configuration file at `~/.config/safecmd/config.toml` to specify additional allowed directories. The file is automatically created on first run.
+You can also start from `config.example.toml` in this repository.
 
 ### Configuration Format
 
 ```toml
-[allowed_directories]
+[additional_allowed_directories]
 paths = [
-    "/home/user/projects",
-    "/home/user/tmp",
+    "/home/user/shared",
     "/Users/yourname/Documents",
 ]
 
@@ -68,4 +68,3 @@ SafeCmd supports several environment variables for configuration and testing:
 - **Purpose**: Disable automatic test mode detection
 - **Effect**: Prevents allowing all paths when running under `cargo test`
 - **Example**: `SAFECMD_DISABLE_TEST_MODE=1 cargo test`
-

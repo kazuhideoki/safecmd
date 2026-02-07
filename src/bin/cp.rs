@@ -14,12 +14,6 @@ fn main() {
         }
     };
 
-    // 現在のディレクトリが許可されているか確認
-    if !config.is_current_dir_allowed() {
-        eprintln!("cp: current directory is not in the allowed directories list");
-        std::process::exit(1);
-    }
-
     // cpコマンドを実行
     if args.files.len() < 2 {
         eprintln!(

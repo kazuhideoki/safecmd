@@ -15,12 +15,6 @@ fn main() {
         }
     };
 
-    // Check if current directory is allowed
-    if !config.is_current_dir_allowed() {
-        eprintln!("rm: current directory is not in the allowed directories list");
-        std::process::exit(1);
-    }
-
     let exit_code = rm::run(args, config);
     std::process::exit(exit_code);
 }

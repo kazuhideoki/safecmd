@@ -43,7 +43,7 @@ fn copy_item(source: &str, target: &str, recursive: bool, config: &Config) -> Re
 
     if !config.is_path_allowed(&canonical_source) {
         return Err(format!(
-            "cp: cannot copy '{source}': path is not in allowed directories"
+            "cp: cannot copy '{source}': path is outside allowed scope"
         ));
     }
 
@@ -58,7 +58,7 @@ fn copy_item(source: &str, target: &str, recursive: bool, config: &Config) -> Re
         PathBuf::from(target)
     };
 
-    // ターゲットの検証（存在する場合）
+    // ターゲットの検証
     if final_target.exists() {
         let canonical_target = final_target.canonicalize().map_err(|_| {
             format!(
@@ -69,7 +69,7 @@ fn copy_item(source: &str, target: &str, recursive: bool, config: &Config) -> Re
 
         if !config.is_path_allowed(&canonical_target) {
             return Err(format!(
-                "cp: cannot copy to '{}': path is not in allowed directories",
+                "cp: cannot copy to '{}': path is outside allowed scope",
                 final_target.display()
             ));
         }
@@ -77,6 +77,11 @@ fn copy_item(source: &str, target: &str, recursive: bool, config: &Config) -> Re
         // 既存ファイルをゴミ箱へ移動
         trash::delete(&final_target)
             .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
+    } else if !config.is_path_allowed(&final_target) {
+        return Err(format!(
+            "cp: cannot copy to '{}': path is outside allowed scope",
+            final_target.display()
+        ));
     }
 
     // ファイルコピー実行
@@ -129,7 +134,7 @@ fn copy_dir_recursive(source: &Path, target: &Path, config: &Config) -> Result<(
 
         if !config.is_path_allowed(&canonical_entry) {
             return Err(format!(
-                "cp: cannot copy '{}': path is not in allowed directories",
+                "cp: cannot copy '{}': path is outside allowed scope",
                 entry_path.display()
             ));
         }

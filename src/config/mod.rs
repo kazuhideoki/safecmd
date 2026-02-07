@@ -1,28 +1,28 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub allowed_directories: AllowedDirectories,
+    pub additional_allowed_directories: AdditionalAllowedDirectories,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AllowedDirectories {
+pub struct AdditionalAllowedDirectories {
     pub paths: Vec<PathBuf>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            allowed_directories: AllowedDirectories { paths: vec![] },
+            additional_allowed_directories: AdditionalAllowedDirectories { paths: vec![] },
         }
     }
 }
 
 impl Config {
-    /// Loads the configuration from the TOML file.
+    /// 設定ファイルを読み込み、実行時の制約設定を構築する。
     ///
     /// # Behavior
     /// 1. In test mode (when CARGO_MANIFEST_DIR is set), allows all paths unless disabled
@@ -38,7 +38,7 @@ impl Config {
                 if std::env::var("SAFECMD_CONFIG_PATH").is_err() {
                     // Return a config that allows all paths for testing
                     return Ok(Self {
-                        allowed_directories: AllowedDirectories {
+                        additional_allowed_directories: AdditionalAllowedDirectories {
                             paths: vec![PathBuf::from("/")],
                         },
                     });
@@ -61,78 +61,24 @@ impl Config {
         Ok(config)
     }
 
-    /// Checks if a given path is within the allowed directories.
+    /// 指定パスが操作可能範囲に含まれるかを判定する。
     ///
-    /// # Security Features
-    /// - Converts relative paths to absolute paths using the current directory
-    /// - Canonicalizes paths to resolve symlinks and normalize ".." components
-    /// - Prevents path traversal attacks (e.g., "../../etc/passwd")
-    /// - Handles non-existent paths by resolving them based on current directory
-    ///
-    /// # Arguments
-    /// * `path` - The path to check (can be relative or absolute)
-    ///
-    /// # Returns
-    /// * `true` if the path is within any allowed directory
-    /// * `false` if the path is outside all allowed directories or cannot be resolved
+    /// # 判定ルール
+    /// - 実行時のカレントディレクトリ配下は常に許可
+    /// - `additional_allowed_directories.paths` 配下は追加で許可
+    /// - `SAFECMD_DISABLE_ALLOWED_DIRECTORIES` が設定されている場合は常に許可
     pub fn is_path_allowed(&self, path: &Path) -> bool {
         // Check if directory restrictions are disabled via environment variable
         if std::env::var("SAFECMD_DISABLE_ALLOWED_DIRECTORIES").is_ok() {
             return true;
         }
-        // First, convert the path to absolute and try to canonicalize it
-        let absolute_path = if path.is_absolute() {
-            // For absolute paths: canonicalize if exists to resolve symlinks,
-            // otherwise use as-is (for paths that will be created)
-            if path.exists() {
-                match path.canonicalize() {
-                    Ok(p) => p,
-                    Err(_) => path.to_path_buf(),
-                }
-            } else {
-                path.to_path_buf()
-            }
-        } else {
-            // For relative paths: resolve against current directory
-            match std::env::current_dir() {
-                Ok(cwd) => {
-                    // Canonicalize the current directory first to handle cases where
-                    // we're in a symlinked directory
-                    let canonical_cwd = match cwd.canonicalize() {
-                        Ok(p) => p,
-                        Err(_) => cwd,
-                    };
-                    let joined_path = canonical_cwd.join(path);
-                    // Canonicalize the final path to resolve any ".." components
-                    // This prevents attacks like "../../../etc/passwd"
-                    if joined_path.exists() {
-                        match joined_path.canonicalize() {
-                            Ok(p) => p,
-                            Err(_) => joined_path,
-                        }
-                    } else {
-                        joined_path
-                    }
-                }
-                Err(_) => return false,
-            }
+
+        let Some(resolved_target) = Self::resolve_target_path(path) else {
+            return false;
         };
 
-        // Check if the resolved path is within any allowed directory
-        for allowed_dir in &self.allowed_directories.paths {
-            // Canonicalize allowed directories too for consistent comparison
-            // This handles cases where allowed dirs contain symlinks
-            let allowed_canonical = if allowed_dir.exists() {
-                match allowed_dir.canonicalize() {
-                    Ok(p) => p,
-                    Err(_) => allowed_dir.to_path_buf(),
-                }
-            } else {
-                allowed_dir.to_path_buf()
-            };
-
-            // Use starts_with to check if path is within allowed directory tree
-            if absolute_path.starts_with(&allowed_canonical) {
+        for scope in self.allowed_scopes() {
+            if resolved_target.starts_with(scope) {
                 return true;
             }
         }
@@ -140,50 +86,91 @@ impl Config {
         false
     }
 
-    /// Checks if the current working directory is within allowed directories.
-    ///
-    /// # Security Purpose
-    /// This provides the first layer of defense - preventing safecmd from even
-    /// running in directories that aren't explicitly allowed. This stops users
-    /// from navigating to sensitive directories and using relative paths.
-    ///
-    /// # Returns
-    /// * `true` if current directory is within any allowed directory
-    /// * `false` if current directory is outside all allowed directories
-    pub fn is_current_dir_allowed(&self) -> bool {
-        // Check if directory restrictions are disabled via environment variable
-        if std::env::var("SAFECMD_DISABLE_ALLOWED_DIRECTORIES").is_ok() {
-            return true;
+    /// 判定対象パスを絶対パスへ解決する。
+    fn resolve_target_path(path: &Path) -> Option<PathBuf> {
+        if path.is_absolute() {
+            return Some(Self::canonicalize_with_missing(path));
         }
-        match std::env::current_dir() {
-            Ok(cwd) => {
-                // Canonicalize to handle cases where we're in a symlinked directory
-                // This ensures we check against the real path, not the symlink
-                let canonical_cwd = match cwd.canonicalize() {
-                    Ok(p) => p,
-                    Err(_) => cwd,
-                };
 
-                for allowed_dir in &self.allowed_directories.paths {
-                    // Try to canonicalize the allowed directory
-                    let allowed_canonical = if allowed_dir.exists() {
-                        match allowed_dir.canonicalize() {
-                            Ok(p) => p,
-                            Err(_) => allowed_dir.to_path_buf(),
-                        }
-                    } else {
-                        // If the allowed directory doesn't exist, use it as-is
-                        allowed_dir.to_path_buf()
-                    };
+        let cwd = std::env::current_dir().ok()?;
+        let canonical_cwd = cwd.canonicalize().unwrap_or(cwd);
+        let joined_path = canonical_cwd.join(path);
+        Some(Self::canonicalize_with_missing(&joined_path))
+    }
 
-                    if canonical_cwd.starts_with(&allowed_canonical) {
-                        return true;
-                    }
+    /// 許可された操作スコープ一覧を構築する。
+    fn allowed_scopes(&self) -> Vec<PathBuf> {
+        let mut scopes = Vec::new();
+
+        if let Ok(cwd) = std::env::current_dir() {
+            scopes.push(cwd.canonicalize().unwrap_or(cwd));
+        }
+
+        for dir in &self.additional_allowed_directories.paths {
+            let resolved = if dir.exists() {
+                dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf())
+            } else {
+                dir.to_path_buf()
+            };
+            scopes.push(resolved);
+        }
+
+        scopes
+    }
+
+    /// 非存在パスを含む場合でも、既存部分を基準に正規化する。
+    fn canonicalize_with_missing(path: &Path) -> PathBuf {
+        if path.exists() {
+            return path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        }
+
+        let mut existing = path;
+        let mut missing_tail: Vec<std::ffi::OsString> = Vec::new();
+
+        while !existing.exists() {
+            let Some(name) = existing.file_name() else {
+                break;
+            };
+            missing_tail.push(name.to_os_string());
+
+            let Some(parent) = existing.parent() else {
+                break;
+            };
+            existing = parent;
+        }
+
+        let mut resolved = if existing.exists() {
+            existing
+                .canonicalize()
+                .unwrap_or_else(|_| existing.to_path_buf())
+        } else {
+            existing.to_path_buf()
+        };
+
+        for part in missing_tail.iter().rev() {
+            resolved.push(part);
+        }
+
+        Self::normalize_lexically(&resolved)
+    }
+
+    /// `.` と `..` を語彙的に解決し、比較可能なパスへ正規化する。
+    fn normalize_lexically(path: &Path) -> PathBuf {
+        let mut normalized = PathBuf::new();
+
+        for component in path.components() {
+            match component {
+                Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+                Component::RootDir => normalized.push(Path::new("/")),
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    normalized.pop();
                 }
-                false
+                Component::Normal(name) => normalized.push(name),
             }
-            Err(_) => false,
         }
+
+        normalized
     }
 
     /// Determines the path to the configuration file.
@@ -205,11 +192,7 @@ impl Config {
         Ok(config_dir.join("config.toml"))
     }
 
-    /// Creates a default configuration file with helpful comments.
-    ///
-    /// # Error Handling
-    /// Always returns an error after creating the file to force the user
-    /// to explicitly configure allowed directories before using safecmd.
+    /// デフォルト設定ファイルを作成し、初回設定を促す。
     fn create_default_config(config_path: &Path) -> Result<(), String> {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
@@ -217,12 +200,13 @@ impl Config {
         }
 
         let default_content = r#"# SafeCmd configuration file
-# Only allow safecmd to run in directories listed below
+# Current working directory is always allowed.
+# Add extra allowed directories below if needed.
 
-[allowed_directories]
+[additional_allowed_directories]
 paths = [
-    # Add your allowed directories here
-    # Example: "/home/user/projects",
+    # Add your additional allowed directories here
+    # Example: "/home/user/shared",
     # Example: "/Users/yourname/Documents",
 ]
 
@@ -235,7 +219,7 @@ paths = [
             .map_err(|e| format!("Failed to write default config: {e}"))?;
 
         Err(format!(
-            "Created default configuration file at: {}\nPlease add allowed directories to the config file and try again.",
+            "Created default configuration file at: {}\nPlease add additional allowed directories to the config file and try again.",
             config_path.display()
         ))
     }
@@ -248,12 +232,10 @@ mod tests {
     use std::sync::Mutex;
     use tempfile::TempDir;
 
-    // Mutex to ensure sequential test execution.
-    // This prevents race conditions when tests modify the current directory.
+    // set_current_dir を使うテストの競合を防ぐため逐次実行する。
     static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
-    /// Sets up test environment by disabling the automatic test mode.
-    /// Without this, safecmd would allow all paths during cargo test.
+    /// テスト時の自動全許可モードを無効化する。
     fn setup_test_env() {
         // Disable test mode for these unit tests
         unsafe {
@@ -262,197 +244,81 @@ mod tests {
     }
 
     #[test]
-    fn test_is_path_allowed_absolute_path() {
-        setup_test_env();
-        let temp_dir = TempDir::new().unwrap();
-        let allowed_dir = temp_dir.path().join("allowed");
-        fs::create_dir(&allowed_dir).unwrap();
-
-        // Use canonical path for allowed directories to ensure consistent comparison
-        let allowed_dir_canonical = allowed_dir.canonicalize().unwrap();
-
-        let config = Config {
-            allowed_directories: AllowedDirectories {
-                paths: vec![allowed_dir_canonical.clone()],
-            },
-        };
-
-        // Test 1: Absolute path within allowed directory should be allowed
-        let test_file = allowed_dir.join("test.txt");
-        fs::write(&test_file, "test").unwrap();
-        assert!(config.is_path_allowed(&test_file));
-
-        // Test 2: Absolute path outside allowed directory should be denied
-        let outside_file = temp_dir.path().join("outside.txt");
-        fs::write(&outside_file, "test").unwrap();
-        assert!(!config.is_path_allowed(&outside_file));
-    }
-
-    // NOTE: Relative path tests are thoroughly covered in integration tests.
-    // Unit tests using set_current_dir are commented out to avoid conflicts
-    // during parallel test execution. The TEST_MUTEX would help, but integration
-    // tests provide better isolation for these scenarios.
-    // #[test]
-    #[allow(dead_code)]
-    fn test_is_path_allowed_relative_paths() {
+    fn test_is_path_allowed_with_current_directory_scope() {
         let _guard = TEST_MUTEX.lock().unwrap();
         setup_test_env();
+
         let temp_dir = TempDir::new().unwrap();
-        let allowed_dir = temp_dir.path().join("allowed");
-        let subdir = allowed_dir.join("subdir");
-        fs::create_dir_all(&subdir).unwrap();
+        let cwd = temp_dir.path().join("workspace");
+        fs::create_dir(&cwd).unwrap();
+        fs::write(cwd.join("target.txt"), "content").unwrap();
 
-        let allowed_dir_canonical = allowed_dir.canonicalize().unwrap();
-        let config = Config {
-            allowed_directories: AllowedDirectories {
-                paths: vec![allowed_dir_canonical],
-            },
-        };
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
 
-        // Change to allowed directory
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&allowed_dir).unwrap();
+        let config = Config::default();
+        assert!(config.is_path_allowed(Path::new("target.txt")));
 
-        // Simple relative path
-        fs::write("file.txt", "test").unwrap();
-        assert!(config.is_path_allowed(Path::new("file.txt")));
-        assert!(config.is_path_allowed(Path::new("./file.txt")));
-
-        // Subdirectory relative path
-        fs::write(subdir.join("subfile.txt"), "test").unwrap();
-        assert!(config.is_path_allowed(Path::new("subdir/subfile.txt")));
-        assert!(config.is_path_allowed(Path::new("./subdir/subfile.txt")));
-
-        // Complex relative path
-        assert!(config.is_path_allowed(Path::new("./subdir/../file.txt")));
-
-        // Restore original directory
-        std::env::set_current_dir(original_dir).unwrap();
-    }
-
-    // Tests path traversal attack prevention (e.g., "../../etc/passwd")
-    // Verifies that canonicalization prevents escaping allowed directories
-    // #[test]
-    #[allow(dead_code)]
-    fn test_is_path_allowed_parent_directory_traversal() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-        setup_test_env();
-        let temp_dir = TempDir::new().unwrap();
-        let allowed_dir = temp_dir.path().join("allowed");
-        let subdir = allowed_dir.join("subdir");
-        fs::create_dir_all(&subdir).unwrap();
-
-        // Create file outside allowed directory
-        let outside_file = temp_dir.path().join("outside.txt");
-        fs::write(&outside_file, "test").unwrap();
-
-        let allowed_dir_canonical = allowed_dir.canonicalize().unwrap();
-        let config = Config {
-            allowed_directories: AllowedDirectories {
-                paths: vec![allowed_dir_canonical],
-            },
-        };
-
-        // Change to subdirectory
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&subdir).unwrap();
-
-        // Try to access parent directories (should be denied)
-        assert!(!config.is_path_allowed(Path::new("../../outside.txt")));
-        assert!(!config.is_path_allowed(Path::new("../..")));
-
-        // But accessing within allowed directory via parent traversal should work
-        fs::write(allowed_dir.join("allowed_file.txt"), "test").unwrap();
-        assert!(config.is_path_allowed(Path::new("../allowed_file.txt")));
-
-        // Restore original directory
-        std::env::set_current_dir(original_dir).unwrap();
-    }
-
-    // Tests handling of non-existent paths (files to be created)
-    // Ensures path resolution works even when the target doesn't exist yet
-    // #[test]
-    #[allow(dead_code)]
-    fn test_is_path_allowed_nonexistent_path() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-        setup_test_env();
-        let temp_dir = TempDir::new().unwrap();
-        let allowed_dir = temp_dir.path().join("allowed");
-        fs::create_dir(&allowed_dir).unwrap();
-
-        let allowed_dir_canonical = allowed_dir.canonicalize().unwrap();
-        let config = Config {
-            allowed_directories: AllowedDirectories {
-                paths: vec![allowed_dir_canonical],
-            },
-        };
-
-        // Change to allowed directory
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&allowed_dir).unwrap();
-
-        // Non-existent relative path should still be checked based on resolved path
-        assert!(config.is_path_allowed(Path::new("nonexistent.txt")));
-        assert!(config.is_path_allowed(Path::new("./subdir/nonexistent.txt")));
-
-        // Non-existent path outside allowed directory
-        assert!(!config.is_path_allowed(Path::new("../outside/nonexistent.txt")));
-
-        // Restore original directory
-        std::env::set_current_dir(original_dir).unwrap();
-    }
-
-    // Tests the first layer of security: current directory validation
-    // This prevents users from running safecmd in unauthorized locations
-    // #[test]
-    #[allow(dead_code)]
-    fn test_is_current_dir_allowed() {
-        let _guard = TEST_MUTEX.lock().unwrap();
-        setup_test_env();
-        let temp_dir = TempDir::new().unwrap();
-        let allowed_dir = temp_dir.path().join("allowed");
-        let disallowed_dir = temp_dir.path().join("disallowed");
-        fs::create_dir(&allowed_dir).unwrap();
-        fs::create_dir(&disallowed_dir).unwrap();
-
-        let allowed_dir_canonical = allowed_dir.canonicalize().unwrap();
-        let config = Config {
-            allowed_directories: AllowedDirectories {
-                paths: vec![allowed_dir_canonical.clone()],
-            },
-        };
-
-        let original_dir = std::env::current_dir().unwrap();
-
-        // Test allowed directory
-        std::env::set_current_dir(&allowed_dir).unwrap();
-        assert!(config.is_current_dir_allowed());
-
-        // Test disallowed directory
-        std::env::set_current_dir(&disallowed_dir).unwrap();
-        assert!(!config.is_current_dir_allowed());
-
-        // Test subdirectory of allowed directory
-        let subdir = allowed_dir.join("subdir");
-        fs::create_dir(&subdir).unwrap();
-        std::env::set_current_dir(&subdir).unwrap();
-        assert!(config.is_current_dir_allowed());
-
-        // Restore original directory
-        std::env::set_current_dir(original_dir).unwrap();
+        std::env::set_current_dir(original).unwrap();
     }
 
     #[test]
-    fn test_empty_allowed_directories() {
+    fn test_is_path_allowed_with_additional_directory_scope() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let cwd = temp_dir.path().join("workspace");
+        let external = temp_dir.path().join("external");
+
+        fs::create_dir(&cwd).unwrap();
+        fs::create_dir(&external).unwrap();
+
+        let external_file = external.join("extra.txt");
+        fs::write(&external_file, "content").unwrap();
+
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
+
         let config = Config {
-            allowed_directories: AllowedDirectories { paths: vec![] },
+            additional_allowed_directories: AdditionalAllowedDirectories {
+                paths: vec![external.clone()],
+            },
         };
 
-        // Empty allowed directories should implement "deny by default" policy
-        // This ensures safecmd fails closed rather than open
-        assert!(!config.is_current_dir_allowed());
-        assert!(!config.is_path_allowed(Path::new("any_file.txt")));
-        assert!(!config.is_path_allowed(Path::new("/absolute/path.txt")));
+        assert!(config.is_path_allowed(&external_file));
+
+        std::env::set_current_dir(original).unwrap();
+    }
+
+    #[test]
+    fn test_is_path_allowed_denies_outside_scopes() {
+        let _guard = TEST_MUTEX.lock().unwrap();
+        setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let cwd = temp_dir.path().join("workspace");
+        let external = temp_dir.path().join("external");
+        let forbidden = temp_dir.path().join("forbidden");
+
+        fs::create_dir(&cwd).unwrap();
+        fs::create_dir(&external).unwrap();
+        fs::create_dir(&forbidden).unwrap();
+
+        let forbidden_file = forbidden.join("secret.txt");
+        fs::write(&forbidden_file, "secret").unwrap();
+
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let config = Config {
+            additional_allowed_directories: AdditionalAllowedDirectories {
+                paths: vec![external],
+            },
+        };
+
+        assert!(!config.is_path_allowed(&forbidden_file));
+
+        std::env::set_current_dir(original).unwrap();
     }
 }

@@ -1,0 +1,10 @@
+# SafeCmd configuration example
+# Current working directory is always allowed.
+# Add extra directories only when you need cross-directory operations.
+
+[additional_allowed_directories]
+paths = [
+    "/tmp",
+    # "/home/user/shared",
+    # "/Users/yourname/Documents",
+]

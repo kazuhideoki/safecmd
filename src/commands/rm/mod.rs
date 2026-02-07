@@ -23,7 +23,7 @@ pub fn run(args: Args, config: Config) -> i32 {
 fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
     if !context.config.is_path_allowed(path) {
         return Err(format!(
-            "rm: cannot remove '{}': path is not in allowed directories",
+            "rm: cannot remove '{}': path is outside allowed scope",
             path.display()
         ));
     }
