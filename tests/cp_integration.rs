@@ -217,7 +217,9 @@ fn missing_arguments_fails() {
         .arg("file.txt")
         .assert()
         .failure()
-        .stderr(predicates::str::contains("only 1 was provided"));
+        .stderr(predicates::str::contains(
+            "2 values required by '<FILES> <FILES>...'; only 1 was provided",
+        ));
 }
 
 #[test]
