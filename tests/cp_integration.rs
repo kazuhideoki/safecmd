@@ -199,7 +199,7 @@ fn missing_arguments_fails() {
         .assert()
         .failure()
         .stderr(predicates::str::contains(
-            "missing destination file operand",
+            "the following required arguments were not provided",
         ));
 
     // only one argument
@@ -209,7 +209,7 @@ fn missing_arguments_fails() {
         .assert()
         .failure()
         .stderr(predicates::str::contains(
-            "missing destination file operand",
+            "2 values required by '<FILES> <FILES>...'; only 1 was provided",
         ));
 }
 
