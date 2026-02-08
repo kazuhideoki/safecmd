@@ -13,8 +13,8 @@ cargo test
 ## document
 
 - docs/
-  - DESIGN.md rm に関する実装状況や計画
-  - DESIGN_CP.md cp に関する実装状況や計画
+  - DESIGN_rm.md rm に関する実装状況や計画
+  - DESIGN_cp.md cp に関する実装状況や計画
 
 ## コーディング規約
 
