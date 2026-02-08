@@ -5,13 +5,18 @@ use std::path::{Path, PathBuf};
 /// cp 実行時に必要な設定とオプションを保持するコンテキスト。
 pub struct ProcessContext {
     pub recursive: bool,
+    pub no_clobber: bool,
     pub config: Config,
 }
 
 impl ProcessContext {
     /// cp 実行に必要な情報をまとめたコンテキストを生成する。
-    pub fn new(recursive: bool, config: Config) -> Self {
-        Self { recursive, config }
+    pub fn new(recursive: bool, no_clobber: bool, config: Config) -> Self {
+        Self {
+            recursive,
+            no_clobber,
+            config,
+        }
     }
 }
 
@@ -90,24 +95,41 @@ pub fn validate(
 
 /// コピー種別に応じた実処理を行う。
 pub fn execute(task: &CopyTask, context: &ProcessContext) -> Result<(), String> {
-    if task.final_target.exists() {
-        trash::delete(&task.final_target)
-            .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
-    }
-
     match task.kind {
-        CopyKind::File => fs::copy(&task.source, &task.final_target)
-            .map(|_| ())
-            .map_err(|e| {
-                format!(
-                    "cp: cannot copy '{}' to '{}': {}",
-                    task.source_label,
-                    task.final_target.display(),
-                    e
-                )
-            }),
+        CopyKind::File => {
+            if task.final_target.exists() {
+                if context.no_clobber && task.final_target.is_file() {
+                    return Ok(());
+                }
+                if !context.no_clobber {
+                    trash::delete(&task.final_target)
+                        .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
+                }
+            }
+
+            fs::copy(&task.source, &task.final_target)
+                .map(|_| ())
+                .map_err(|e| {
+                    format!(
+                        "cp: cannot copy '{}' to '{}': {}",
+                        task.source_label,
+                        task.final_target.display(),
+                        e
+                    )
+                })
+        }
         CopyKind::RecursiveDirectory => {
-            copy_dir_recursive(&task.source, &task.final_target, &context.config)
+            if task.final_target.exists() && !context.no_clobber {
+                trash::delete(&task.final_target)
+                    .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
+            }
+
+            copy_dir_recursive(
+                &task.source,
+                &task.final_target,
+                &context.config,
+                context.no_clobber,
+            )
         }
         CopyKind::DirectoryWithoutRecursive => {
             Err(format!("cp: omitting directory '{}'", task.source_label))
@@ -120,7 +142,12 @@ pub fn execute(task: &CopyTask, context: &ProcessContext) -> Result<(), String> 
 }
 
 /// ディレクトリを再帰的に走査し、配下を同構造でコピーする。
-fn copy_dir_recursive(source: &Path, target: &Path, config: &Config) -> Result<(), String> {
+fn copy_dir_recursive(
+    source: &Path,
+    target: &Path,
+    config: &Config,
+    no_clobber: bool,
+) -> Result<(), String> {
     fs::create_dir_all(target)
         .map_err(|e| format!("cp: cannot create directory '{}': {}", target.display(), e))?;
 
@@ -151,6 +178,16 @@ fn copy_dir_recursive(source: &Path, target: &Path, config: &Config) -> Result<(
 
         if entry_path.is_file() {
             if target_path.exists() {
+                if no_clobber {
+                    if target_path.is_file() {
+                        continue;
+                    }
+                    return Err(format!(
+                        "cp: cannot copy '{}' to '{}': destination is not a file",
+                        entry_path.display(),
+                        target_path.display()
+                    ));
+                }
                 trash::delete(&target_path)
                     .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
             }
@@ -164,7 +201,7 @@ fn copy_dir_recursive(source: &Path, target: &Path, config: &Config) -> Result<(
                 )
             })?;
         } else if entry_path.is_dir() {
-            copy_dir_recursive(&entry_path, &target_path, config)?;
+            copy_dir_recursive(&entry_path, &target_path, config, no_clobber)?;
         }
     }
 

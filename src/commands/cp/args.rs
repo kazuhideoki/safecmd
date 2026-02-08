@@ -8,6 +8,10 @@ pub struct Args {
     #[arg(short = 'f')]
     pub force: bool,
 
+    /// 既存ファイルを上書きせずにスキップする
+    #[arg(short = 'n')]
+    pub no_clobber: bool,
+
     /// Copy directories recursively
     #[arg(short = 'R', short_alias = 'r', long = "recursive")]
     pub recursive: bool,
