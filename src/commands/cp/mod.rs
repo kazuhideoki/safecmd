@@ -27,7 +27,7 @@ pub fn run(
         notifications::notify_command_result(&CommandSummary {
             kind: CommandKind::Cp,
             success_count: 0,
-            failure_count: 1,
+            failure_count: sources.len(),
         });
         return 1;
     }
@@ -90,20 +90,19 @@ mod tests {
     use super::*;
     use crate::config::{AdditionalAllowedDirectories, Config};
     use crate::notifications::{self, CommandKind, CommandSummary};
+    use std::cell::RefCell;
     use std::fs;
-    use std::sync::{Mutex, OnceLock};
+    use std::thread_local;
     use tempfile::TempDir;
 
-    fn notification_store() -> &'static Mutex<Vec<CommandSummary>> {
-        static STORE: OnceLock<Mutex<Vec<CommandSummary>>> = OnceLock::new();
-        STORE.get_or_init(|| Mutex::new(Vec::new()))
+    thread_local! {
+        static NOTIFICATION_STORE: RefCell<Vec<CommandSummary>> = const { RefCell::new(Vec::new()) };
     }
 
     fn capture_notification(summary: &CommandSummary) -> Result<(), String> {
-        notification_store()
-            .lock()
-            .expect("lock notification store")
-            .push(summary.clone());
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().push(summary.clone());
+        });
         Ok(())
     }
 
@@ -123,10 +122,9 @@ mod tests {
         let target = temp_dir.path().join("target.txt");
         fs::write(&source, "hello").expect("write source");
 
-        notification_store()
-            .lock()
-            .expect("lock notification store")
-            .clear();
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().clear();
+        });
         notifications::with_test_notifier(capture_notification, || {
             let exit_code = run(
                 vec![source.to_string_lossy().to_string()],
@@ -139,9 +137,7 @@ mod tests {
             assert_eq!(exit_code, 0);
         });
 
-        let captured = notification_store()
-            .lock()
-            .expect("lock notification store");
+        let captured = NOTIFICATION_STORE.with(|store| store.borrow().clone());
         assert_eq!(captured.len(), 1);
         assert_eq!(
             captured[0],
@@ -149,6 +145,47 @@ mod tests {
                 kind: CommandKind::Cp,
                 success_count: 1,
                 failure_count: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn run_notifies_all_sources_as_failure_when_multi_source_target_is_not_directory() {
+        // 複数ソース指定でターゲットがディレクトリでない場合に全ソースを失敗件数へ計上することを確認する。
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let source1 = temp_dir.path().join("source1.txt");
+        let source2 = temp_dir.path().join("source2.txt");
+        let target = temp_dir.path().join("target.txt");
+        fs::write(&source1, "one").expect("write source1");
+        fs::write(&source2, "two").expect("write source2");
+        fs::write(&target, "target").expect("write target");
+
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().clear();
+        });
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(
+                vec![
+                    source1.to_string_lossy().to_string(),
+                    source2.to_string_lossy().to_string(),
+                ],
+                target.to_string_lossy().to_string(),
+                false,
+                false,
+                false,
+                allow_all_config(),
+            );
+            assert_eq!(exit_code, 1);
+        });
+
+        let captured = NOTIFICATION_STORE.with(|store| store.borrow().clone());
+        assert_eq!(captured.len(), 1);
+        assert_eq!(
+            captured[0],
+            CommandSummary {
+                kind: CommandKind::Cp,
+                success_count: 0,
+                failure_count: 2,
             }
         );
     }

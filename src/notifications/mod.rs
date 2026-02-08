@@ -1,6 +1,6 @@
 use std::env;
 #[cfg(test)]
-use std::sync::{Mutex, OnceLock};
+use std::{cell::Cell, thread_local};
 
 /// 通知対象のコマンド種別を表す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,25 +81,63 @@ fn dispatch(summary: &CommandSummary) -> Result<(), String> {
 type TestNotifier = fn(&CommandSummary) -> Result<(), String>;
 
 #[cfg(test)]
-fn notifier_slot() -> &'static Mutex<Option<TestNotifier>> {
-    static SLOT: OnceLock<Mutex<Option<TestNotifier>>> = OnceLock::new();
-    SLOT.get_or_init(|| Mutex::new(None))
+thread_local! {
+    static TEST_NOTIFIER_SLOT: Cell<Option<TestNotifier>> = const { Cell::new(None) };
 }
 
 #[cfg(test)]
 fn test_override() -> Option<TestNotifier> {
-    notifier_slot().lock().ok().and_then(|guard| *guard)
+    TEST_NOTIFIER_SLOT.with(|slot| slot.get())
 }
 
 #[cfg(test)]
 pub(crate) fn with_test_notifier<T>(notifier: TestNotifier, f: impl FnOnce() -> T) -> T {
-    *notifier_slot().lock().expect("lock notifier slot") = Some(notifier);
+    // スコープ終了時に必ず元の notifier 設定へ戻す。
+    struct RestoreGuard {
+        previous: Option<TestNotifier>,
+    }
+
+    impl Drop for RestoreGuard {
+        fn drop(&mut self) {
+            TEST_NOTIFIER_SLOT.with(|slot| {
+                slot.set(self.previous);
+            });
+        }
+    }
+
+    let previous = TEST_NOTIFIER_SLOT.with(|slot| {
+        let previous = slot.get();
+        slot.set(Some(notifier));
+        previous
+    });
+    let _restore_guard = RestoreGuard { previous };
     let result = f();
-    *notifier_slot().lock().expect("lock notifier slot") = None;
     result
 }
 
 #[cfg(not(target_os = "macos"))]
 fn dispatch(_summary: &CommandSummary) -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn capture_noop(_summary: &CommandSummary) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[test]
+    fn with_test_notifier_clears_override_when_callback_panics() {
+        // コールバックが panic してもテスト通知上書き設定が残留しないことを確認する。
+        let result = std::panic::catch_unwind(|| {
+            with_test_notifier(capture_noop, || {
+                panic!("panic in callback");
+            });
+        });
+
+        assert!(result.is_err());
+        assert!(test_override().is_none());
+    }
 }
