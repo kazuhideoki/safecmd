@@ -2,6 +2,7 @@ use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::fs;
 use std::process::Command;
+use std::process::Output;
 use tempfile::TempDir;
 
 /// 設定ファイルを作成する。
@@ -43,6 +44,16 @@ fn assert_rm_success_or_skip(cmd: &mut Command) -> bool {
     }
 
     panic!("rm failed unexpectedly: {stderr}");
+}
+
+/// rm 実行結果を返し、trash 非対応環境の削除失敗はスキップ可能として扱う。
+fn run_rm_or_skip_for_trash(cmd: &mut Command) -> Option<Output> {
+    let output = cmd.output().expect("run rm");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if stderr.contains("Error during a `trash` operation") {
+        return None;
+    }
+    Some(output)
 }
 
 #[test]
@@ -316,4 +327,43 @@ paths = ["relative/path"]
         .assert()
         .failure()
         .stderr(predicate::str::contains("must be an absolute path"));
+}
+
+#[test]
+fn rm_recursive_continues_when_one_path_is_outside_allowed_scope() {
+    // 許可対象と拒否対象が混在した -r 実行で、許可対象の削除を継続しつつ終了コード非0となることを確認する。
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let workspace_dir = temp_path.join("workspace");
+    let allowed_dir = workspace_dir.join("allowed_recursive");
+    let forbidden_dir = temp_path.join("forbidden_recursive");
+    fs::create_dir_all(allowed_dir.join("nested")).unwrap();
+    fs::create_dir_all(forbidden_dir.join("nested")).unwrap();
+    fs::write(allowed_dir.join("nested").join("ok.txt"), "ok").unwrap();
+    fs::write(forbidden_dir.join("nested").join("ng.txt"), "ng").unwrap();
+
+    let config_path = write_config(temp_path, &[]);
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&workspace_dir)
+        .arg("-r")
+        .arg(&forbidden_dir)
+        .arg("allowed_recursive");
+
+    let Some(output) = run_rm_or_skip_for_trash(&mut cmd) else {
+        return;
+    };
+
+    assert!(!output.status.success(), "exit status should be non-zero");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("path is outside allowed scope"));
+    assert!(
+        !allowed_dir.exists(),
+        "allowed directory should still be removed"
+    );
+    assert!(forbidden_dir.exists(), "forbidden directory should remain");
 }
