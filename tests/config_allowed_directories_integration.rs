@@ -204,3 +204,28 @@ fn rm_continues_after_creating_default_config() {
     let content = fs::read_to_string(config_path).unwrap();
     assert!(content.contains("[additional_allowed_directories]"));
 }
+
+#[test]
+fn rm_fails_when_config_contains_relative_additional_path() {
+    // 設定ファイルに相対パスが含まれる場合は設定エラーで失敗することを確認する。
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+    let config_path = temp_path.join("config.toml");
+    fs::write(
+        &config_path,
+        r#"[additional_allowed_directories]
+paths = ["relative/path"]
+"#,
+    )
+    .unwrap();
+
+    let mut cmd = Command::cargo_bin("rm").unwrap();
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(temp_path)
+        .arg("-f")
+        .arg("file.txt")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("must be an absolute path"));
+}
