@@ -84,7 +84,8 @@ impl Config {
     /// - 実行時のカレントディレクトリ配下は常に許可
     /// - `additional_allowed_directories.paths` 配下は追加で許可
     pub fn is_path_allowed(&self, path: &Path) -> bool {
-        let Some(resolved_target) = Self::resolve_target_path(path) else {
+        let Some(resolved_target) = Self::resolve_target_path_without_symlink_resolution(path)
+        else {
             return false;
         };
 
@@ -98,35 +99,32 @@ impl Config {
     }
 
     /// 判定対象パスを絶対パスへ解決する。
-    fn resolve_target_path(path: &Path) -> Option<PathBuf> {
-        if path.is_absolute() {
-            return Some(Self::canonicalize_with_missing(path));
-        }
+    fn resolve_target_path_without_symlink_resolution(path: &Path) -> Option<PathBuf> {
+        let absolute_path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            let cwd = std::env::current_dir().ok()?;
+            cwd.join(path)
+        };
 
-        let cwd = std::env::current_dir().ok()?;
-        let canonical_cwd = cwd.canonicalize().unwrap_or(cwd);
-        let joined_path = canonical_cwd.join(path);
-        Some(Self::canonicalize_with_missing(&joined_path))
+        Some(Self::canonicalize_preserving_symlink_leaf(&absolute_path))
     }
 
-    /// 許可された操作スコープ一覧を構築する。
-    fn allowed_scopes(&self) -> Vec<PathBuf> {
-        let mut scopes = Vec::new();
-
-        if let Ok(cwd) = std::env::current_dir() {
-            scopes.push(cwd.canonicalize().unwrap_or(cwd));
+    /// 最終要素がシンボリックリンクの場合はリンク先へ辿らず、親ディレクトリのみ実体解決する。
+    fn canonicalize_preserving_symlink_leaf(path: &Path) -> PathBuf {
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                let Some(name) = path.file_name() else {
+                    return Self::normalize_lexically(path);
+                };
+                let Some(parent) = path.parent() else {
+                    return Self::normalize_lexically(path);
+                };
+                let resolved_parent = Self::canonicalize_with_missing(parent);
+                Self::normalize_lexically(&resolved_parent.join(name))
+            }
+            _ => Self::canonicalize_with_missing(path),
         }
-
-        for dir in &self.additional_allowed_directories.paths {
-            let resolved = if dir.exists() {
-                dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf())
-            } else {
-                dir.to_path_buf()
-            };
-            scopes.push(resolved);
-        }
-
-        scopes
     }
 
     /// 非存在パスを含む場合でも、既存部分を基準に正規化する。
@@ -163,6 +161,26 @@ impl Config {
         }
 
         Self::normalize_lexically(&resolved)
+    }
+
+    /// 許可された操作スコープ一覧を構築する。
+    fn allowed_scopes(&self) -> Vec<PathBuf> {
+        let mut scopes = Vec::new();
+
+        if let Ok(cwd) = std::env::current_dir() {
+            scopes.push(cwd.canonicalize().unwrap_or(cwd));
+        }
+
+        for dir in &self.additional_allowed_directories.paths {
+            let resolved = if dir.exists() {
+                dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf())
+            } else {
+                dir.to_path_buf()
+            };
+            scopes.push(resolved);
+        }
+
+        scopes
     }
 
     /// `.` と `..` を語彙的に解決し、比較可能なパスへ正規化する。
@@ -324,6 +342,36 @@ mod tests {
         };
 
         assert!(!config.is_path_allowed(&forbidden_file));
+
+        std::env::set_current_dir(original).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_is_path_allowed_uses_symlink_path_instead_of_target() {
+        // シンボリックリンクはリンク先ではなくリンク自身の配置場所で許可判定することを確認する。
+        use std::os::unix::fs::symlink;
+        let _guard = TEST_MUTEX.lock().unwrap();
+        setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let cwd = temp_dir.path().join("workspace");
+        let outside = temp_dir.path().join("outside");
+
+        fs::create_dir(&cwd).unwrap();
+        fs::create_dir(&outside).unwrap();
+
+        let outside_file = outside.join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+
+        let link_in_cwd = cwd.join("secret-link.txt");
+        symlink(&outside_file, &link_in_cwd).unwrap();
+
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let config = Config::default();
+        assert!(config.is_path_allowed(Path::new("secret-link.txt")));
 
         std::env::set_current_dir(original).unwrap();
     }
