@@ -25,6 +25,12 @@ fn main() {
     }
 
     let (target, sources) = args.files.split_last().unwrap();
-    let exit_code = cp::run(sources.to_vec(), target.clone(), args.recursive, config);
+    let exit_code = cp::run(
+        sources.to_vec(),
+        target.clone(),
+        args.recursive,
+        args.force,
+        config,
+    );
     std::process::exit(exit_code);
 }

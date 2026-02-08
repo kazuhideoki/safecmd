@@ -7,7 +7,13 @@ pub mod args;
 pub mod handlers;
 
 /// cp コマンド全体を実行し、各ソースの処理結果に応じて終了コードを決定する。
-pub fn run(sources: Vec<String>, target: String, recursive: bool, config: Config) -> i32 {
+pub fn run(
+    sources: Vec<String>,
+    target: String,
+    recursive: bool,
+    _force: bool,
+    config: Config,
+) -> i32 {
     let target_path = Path::new(&target);
     let mut exit_code = 0;
     let context = ProcessContext::new(recursive, config);

@@ -77,6 +77,44 @@ fn overwrite_existing_file() {
 }
 
 #[test]
+fn force_flag_is_accepted_for_overwrite() {
+    // -f を指定しても通常の安全な上書きコピーが実行されることを確認する。
+    let temp_dir = tempdir().expect("create tmp dir");
+    let source_path = temp_dir.path().join("source.txt");
+    let target_path = temp_dir.path().join("target.txt");
+
+    let mut source_file = File::create(&source_path).expect("create source file");
+    source_file
+        .write_all(b"New content")
+        .expect("write to source file");
+
+    let mut target_file = File::create(&target_path).expect("create target file");
+    target_file
+        .write_all(b"Old content")
+        .expect("write to target file");
+
+    let output = Command::cargo_bin("cp")
+        .expect("binary exists")
+        .arg("-f")
+        .arg(&source_path)
+        .arg(&target_path)
+        .output()
+        .expect("run cp");
+
+    if !output.status.success() {
+        // GUI が使えない環境では trash 実装が Finder に接続できず失敗するため許容する。
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("failed to move existing file to trash") {
+            return;
+        }
+        panic!("cp failed unexpectedly: {stderr}");
+    }
+
+    let content = fs::read_to_string(&target_path).expect("read target file");
+    assert_eq!(content, "New content", "content was not overwritten");
+}
+
+#[test]
 fn copy_to_directory() {
     // create a temporary directory
     let temp_dir = tempdir().expect("create tmp dir");

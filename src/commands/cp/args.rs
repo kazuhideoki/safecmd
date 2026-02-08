@@ -4,6 +4,10 @@ use clap::Parser;
 #[command(name = "cp")]
 #[command(about = "Safely copy files and directories", long_about = None)]
 pub struct Args {
+    /// 互換性のため `-f` を受理する（安全挙動は変更しない）
+    #[arg(short = 'f')]
+    pub force: bool,
+
     /// Copy directories recursively
     #[arg(short = 'R', short_alias = 'r', long = "recursive")]
     pub recursive: bool,
