@@ -12,11 +12,12 @@ pub fn run(
     target: String,
     recursive: bool,
     _force: bool,
+    no_clobber: bool,
     config: Config,
 ) -> i32 {
     let target_path = Path::new(&target);
     let mut exit_code = 0;
-    let context = ProcessContext::new(recursive, config);
+    let context = ProcessContext::new(recursive, no_clobber, config);
 
     if sources.len() > 1 && !target_path.is_dir() {
         eprintln!("cp: target '{target}' is not a directory");
