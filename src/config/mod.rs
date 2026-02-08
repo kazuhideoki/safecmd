@@ -57,8 +57,25 @@ impl Config {
 
         let config: Config =
             toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))?;
+        config.validate()?;
 
         Ok(config)
+    }
+
+    /// 読み込んだ設定値の整合性を検証する。
+    ///
+    /// `additional_allowed_directories.paths` には絶対パスのみを許可する。
+    fn validate(&self) -> Result<(), String> {
+        for (index, path) in self.additional_allowed_directories.paths.iter().enumerate() {
+            if !path.is_absolute() {
+                return Err(format!(
+                    "Invalid config: additional_allowed_directories.paths[{index}] must be an absolute path: {}",
+                    path.display()
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     /// 指定パスが操作可能範囲に含まれるかを判定する。
@@ -309,5 +326,53 @@ mod tests {
         assert!(!config.is_path_allowed(&forbidden_file));
 
         std::env::set_current_dir(original).unwrap();
+    }
+
+    #[test]
+    fn test_load_allows_empty_additional_paths() {
+        // `paths = []` を許容し、追加許可なし設定として読み込めることを確認する。
+        let _guard = TEST_MUTEX.lock().unwrap();
+        setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        fs::write(
+            &config_path,
+            r#"[additional_allowed_directories]
+paths = []
+"#,
+        )
+        .unwrap();
+
+        unsafe {
+            std::env::set_var("SAFECMD_CONFIG_PATH", &config_path);
+        }
+
+        let loaded = Config::load().unwrap();
+        assert!(loaded.additional_allowed_directories.paths.is_empty());
+    }
+
+    #[test]
+    fn test_load_rejects_relative_additional_path() {
+        // 相対パス指定を設定エラーとして拒否することを確認する。
+        let _guard = TEST_MUTEX.lock().unwrap();
+        setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        fs::write(
+            &config_path,
+            r#"[additional_allowed_directories]
+paths = ["relative/path"]
+"#,
+        )
+        .unwrap();
+
+        unsafe {
+            std::env::set_var("SAFECMD_CONFIG_PATH", &config_path);
+        }
+
+        let err = Config::load().unwrap_err();
+        assert!(err.contains("must be an absolute path"));
     }
 }

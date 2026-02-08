@@ -30,6 +30,7 @@ fn main() {
         target.clone(),
         args.recursive,
         args.force,
+        args.no_clobber,
         config,
     );
     std::process::exit(exit_code);
