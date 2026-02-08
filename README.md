@@ -59,11 +59,6 @@ SafeCmd supports several environment variables for configuration and testing:
 - **Default**: `~/.config/safecmd/config.toml`
 - **Example**: `SAFECMD_CONFIG_PATH=/custom/path/config.toml rm file.txt`
 
-### `SAFECMD_DISABLE_ALLOWED_DIRECTORIES`
-- **Purpose**: Disable directory restriction checks (use with caution)
-- **Effect**: When set (any value), allows execution in any directory
-- **Example**: `SAFECMD_DISABLE_ALLOWED_DIRECTORIES=1 rm file.txt`
-
 ### `SAFECMD_DISABLE_TEST_MODE`
 - **Purpose**: Disable automatic test mode detection
 - **Effect**: Prevents allowing all paths when running under `cargo test`
