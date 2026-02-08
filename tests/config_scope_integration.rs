@@ -282,6 +282,51 @@ fn cp_denies_target_outside_allowed_scope() {
     assert!(!forbidden_target.exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn cp_recursive_no_clobber_denies_writes_via_symlink_under_destination() {
+    // 再帰コピー時にコピー先配下のシンボリックリンク経由で許可範囲外へ書き込む経路を拒否することを確認する。
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let workspace_dir = temp_path.join("workspace");
+    let outside_dir = temp_path.join("outside");
+    fs::create_dir(&workspace_dir).unwrap();
+    fs::create_dir(&outside_dir).unwrap();
+
+    let source_dir = workspace_dir.join("src");
+    let source_nested_dir = source_dir.join("nested");
+    let dest_dir = workspace_dir.join("dest");
+    let existing_dest_subdir = dest_dir.join("src");
+    let link_path = existing_dest_subdir.join("nested");
+    fs::create_dir(&source_dir).unwrap();
+    fs::create_dir(&source_nested_dir).unwrap();
+    fs::create_dir(&dest_dir).unwrap();
+    fs::create_dir(&existing_dest_subdir).unwrap();
+    fs::write(source_nested_dir.join("payload.txt"), "payload").unwrap();
+    symlink(&outside_dir, &link_path).unwrap();
+
+    let config_path = write_config(temp_path, &[]);
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cp"));
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&workspace_dir)
+        .arg("-rn")
+        .arg("src")
+        .arg("dest")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("path is outside allowed scope"));
+
+    assert!(
+        !outside_dir.join("payload.txt").exists(),
+        "symlink traversal must not create files outside allowed scope"
+    );
+}
+
 #[test]
 fn rm_continues_after_creating_default_config() {
     // 設定ファイル未作成時に自動生成後そのまま処理継続できることを確認する。
