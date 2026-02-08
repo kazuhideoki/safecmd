@@ -241,30 +241,7 @@ impl Config {
                 .map_err(|e| format!("Failed to create config directory: {e}"))?;
         }
 
-<<<<<<< HEAD
-        let default_content = r#"# SafeCmd configuration file
-# Current working directory is always allowed.
-# Add extra allowed directories below if needed.
-
-[additional_allowed_directories]
-paths = [
-    # Add your additional allowed directories here
-    # Example: "/home/user/shared",
-    # Example: "/Users/yourname/Documents",
-]
-
-[notify]
-macos_notify = false
-
-"#;
-
-        let mut file = fs::File::create(config_path)
-            .map_err(|e| format!("Failed to create config file: {e}"))?;
-
-        file.write_all(default_content.as_bytes())
-=======
         fs::write(config_path, DEFAULT_CONFIG_TEMPLATE)
->>>>>>> main
             .map_err(|e| format!("Failed to write default config: {e}"))
     }
 }
