@@ -5,6 +5,13 @@ use std::io::Write;
 use std::process::Command;
 use tempfile::tempdir;
 
+/// cp バイナリ実行時に明示テストモードを付与したコマンドを生成する。
+fn cp_command() -> Command {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cp"));
+    cmd.env("SAFECMD_TEST_MODE", "1");
+    cmd
+}
+
 #[test]
 fn single_file_copy() {
     // create a temporary directory
@@ -19,7 +26,7 @@ fn single_file_copy() {
         .expect("write to source file");
 
     // run the cp command
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg(&source_path)
         .arg(&target_path)
         .assert()
@@ -54,7 +61,7 @@ fn overwrite_existing_file() {
         .expect("write to target file");
 
     // run the cp command
-    let output = Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    let output = cp_command()
         .arg(&source_path)
         .arg(&target_path)
         .output()
@@ -91,7 +98,7 @@ fn force_flag_is_accepted_for_overwrite() {
         .write_all(b"Old content")
         .expect("write to target file");
 
-    let output = Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    let output = cp_command()
         .arg("-f")
         .arg(&source_path)
         .arg(&target_path)
@@ -125,7 +132,7 @@ fn copy_to_directory() {
     fs::create_dir(&target_dir).expect("create target directory");
 
     // run the cp command
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg(&source_path)
         .arg(&target_dir)
         .assert()
@@ -152,7 +159,7 @@ fn copy_multiple_files_to_directory() {
     fs::create_dir(&target_dir).expect("create target directory");
 
     // run the cp command
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg(&source1_path)
         .arg(&source2_path)
         .arg(&target_dir)
@@ -180,7 +187,7 @@ fn copy_multiple_files_to_non_directory_fails() {
     File::create(&target_path).expect("create target file");
 
     // run the cp command (should fail)
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg(&source1_path)
         .arg(&source2_path)
         .arg(&target_path)
@@ -197,7 +204,7 @@ fn copy_nonexistent_file_fails() {
     let target_path = temp_dir.path().join("target.txt");
 
     // run the cp command (should fail)
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg(&source_path)
         .arg(&target_path)
         .assert()
@@ -219,7 +226,7 @@ fn copy_directory_without_r_flag_fails() {
     fs::create_dir(&source_dir).expect("create source directory");
 
     // run the cp command without -r flag (should fail)
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg(&source_dir)
         .arg(&target_dir)
         .assert()
@@ -233,7 +240,7 @@ fn copy_directory_without_r_flag_fails() {
 #[test]
 fn missing_arguments_fails() {
     // 引数なし時は clap の必須引数エラーになることを確認する。
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .assert()
         .failure()
         .stderr(predicates::str::contains(
@@ -241,7 +248,7 @@ fn missing_arguments_fails() {
         ));
 
     // 引数1つだけでも同様に clap の必須引数エラーになることを確認する。
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg("file.txt")
         .assert()
         .failure()
@@ -270,7 +277,7 @@ fn verify_original_file_moved_to_trash_on_overwrite() {
         .expect("write to target file");
 
     // run the cp command
-    let output = Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    let output = cp_command()
         .arg(&source_path)
         .arg(&target_path)
         .output()
@@ -321,7 +328,7 @@ fn copy_directory_with_r_flag() {
         .expect("write to subfile");
 
     // run the cp command with -r flag
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg("-r")
         .arg(&source_dir)
         .arg(&target_dir)
@@ -364,7 +371,7 @@ fn copy_directory_with_capital_r_flag() {
     File::create(&file_path).expect("create file");
 
     // run the cp command with -R flag (capital)
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg("-R")
         .arg(&source_dir)
         .arg(&target_dir)
@@ -387,7 +394,7 @@ fn copy_empty_directory_with_r_flag() {
     fs::create_dir(&source_dir).expect("create source directory");
 
     // run the cp command with -r flag
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg("-r")
         .arg(&source_dir)
         .arg(&target_dir)
@@ -421,7 +428,7 @@ fn copy_directory_to_existing_directory() {
     fs::create_dir(&target_parent).expect("create target parent directory");
 
     // run the cp command with -r flag
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg("-r")
         .arg(&source_dir)
         .arg(&target_parent)
@@ -453,7 +460,7 @@ fn overwrite_directory_with_r_flag() {
     File::create(&old_file).expect("create old file");
 
     // run the cp command with -r flag
-    Command::new(assert_cmd::cargo::cargo_bin!("cp"))
+    cp_command()
         .arg("-r")
         .arg(&source_dir)
         .arg(&target_dir)
@@ -486,8 +493,7 @@ fn no_clobber_skips_overwrite_for_single_file() {
         .write_all(b"Old content")
         .expect("write to target file");
 
-    Command::cargo_bin("cp")
-        .expect("binary exists")
+    cp_command()
         .arg("-n")
         .arg(&source_path)
         .arg(&target_path)
@@ -534,8 +540,7 @@ fn no_clobber_skips_existing_files_in_recursive_copy() {
         .write_all(b"keep me")
         .expect("write target existing file");
 
-    Command::cargo_bin("cp")
-        .expect("binary exists")
+    cp_command()
         .arg("-rn")
         .arg(&source_dir)
         .arg(&target_dir)
@@ -572,8 +577,7 @@ fn no_clobber_does_not_hide_type_conflict_with_directory_target() {
     fs::create_dir(&target_dir).expect("create target directory");
     fs::create_dir(&conflicting_path).expect("create conflicting directory");
 
-    Command::cargo_bin("cp")
-        .expect("binary exists")
+    cp_command()
         .arg("-n")
         .arg(&source_path)
         .arg(&target_dir)
@@ -601,8 +605,7 @@ fn recursive_copy_without_no_clobber_replaces_existing_destination_directory() {
     let mut fresh = File::create(&new_file).expect("create new file");
     fresh.write_all(b"fresh").expect("write new file");
 
-    Command::cargo_bin("cp")
-        .expect("binary exists")
+    cp_command()
         .arg("-r")
         .arg(&source_dir)
         .arg(&target_parent)
@@ -637,8 +640,7 @@ fn recursive_no_clobber_reports_type_conflict_with_existing_directory() {
     let mut file = File::create(&source_file).expect("create source file");
     file.write_all(b"payload").expect("write source file");
 
-    Command::cargo_bin("cp")
-        .expect("binary exists")
+    cp_command()
         .arg("-rn")
         .arg(&source_dir)
         .arg(&target_parent)
