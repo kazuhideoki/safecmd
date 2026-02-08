@@ -148,6 +148,8 @@ fn copy_dir_recursive(
     config: &Config,
     no_clobber: bool,
 ) -> Result<(), String> {
+    ensure_target_path_allowed_for_write(target, config)?;
+
     fs::create_dir_all(target)
         .map_err(|e| format!("cp: cannot create directory '{}': {}", target.display(), e))?;
 
@@ -177,6 +179,8 @@ fn copy_dir_recursive(
         }
 
         if entry_path.is_file() {
+            ensure_target_path_allowed_for_write(&target_path, config)?;
+
             if target_path.exists() {
                 if no_clobber {
                     if target_path.is_file() {
@@ -201,8 +205,30 @@ fn copy_dir_recursive(
                 )
             })?;
         } else if entry_path.is_dir() {
+            ensure_target_path_allowed_for_write(&target_path, config)?;
             copy_dir_recursive(&entry_path, &target_path, config, no_clobber)?;
         }
+    }
+
+    Ok(())
+}
+
+/// コピー先への書き込み前に、許可範囲外パスとシンボリックリンク経由を拒否する。
+fn ensure_target_path_allowed_for_write(path: &Path, config: &Config) -> Result<(), String> {
+    if let Ok(meta) = fs::symlink_metadata(path)
+        && meta.file_type().is_symlink()
+    {
+        return Err(format!(
+            "cp: cannot copy to '{}': path is outside allowed scope",
+            path.display()
+        ));
+    }
+
+    if !config.is_path_allowed(path) {
+        return Err(format!(
+            "cp: cannot copy to '{}': path is outside allowed scope",
+            path.display()
+        ));
     }
 
     Ok(())
