@@ -47,6 +47,9 @@ paths = [
     "/Users/yourname/Documents",
 ]
 
+[notify]
+macos_notify = false
+
 ```
 
 ## Environment Variables

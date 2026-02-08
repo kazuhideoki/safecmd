@@ -2,6 +2,7 @@ pub mod args;
 pub mod handlers;
 
 use crate::config::Config;
+use crate::notifications::{CommandKind, CommandResultCounter};
 use args::Args;
 use handlers::{ProcessContext, RemovalKind};
 use std::path::Path;
@@ -9,13 +10,21 @@ use std::path::Path;
 /// rm コマンド全体を実行し、各パスの処理結果に応じて終了コードを決定する。
 pub fn run(args: Args, config: Config) -> i32 {
     let mut exit_code = 0;
+    let mut counter = CommandResultCounter::new(CommandKind::Rm);
     let context = ProcessContext::new(args, config);
 
     for path in &context.args.path {
         if let Err(msg) = process_path(path, &context) {
             eprintln!("{msg}");
             exit_code = 1;
+            counter.record_failure();
+        } else {
+            counter.record_success();
         }
+    }
+
+    if context.config.notify.macos_notify {
+        counter.notify();
     }
 
     exit_code
@@ -78,10 +87,15 @@ fn determine_handler(path: &Path, context: &ProcessContext) -> Result<RemovalKin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AdditionalAllowedDirectories, Config};
+    use crate::config::{AdditionalAllowedDirectories, Config, NotifyConfig};
+    use crate::notifications::{self, CommandKind, CommandSummary};
     #[cfg(unix)]
     use std::os::unix::fs::symlink;
+    use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
+
+    // 共有通知ストアを使うテストの競合を防ぐため逐次実行する。
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
     /// テスト用の最小コンテキストを生成する。
     fn build_context(recursive: bool) -> ProcessContext {
@@ -96,6 +110,7 @@ mod tests {
                 additional_allowed_directories: AdditionalAllowedDirectories {
                     paths: vec![std::path::PathBuf::from("/")],
                 },
+                notify: NotifyConfig { macos_notify: true },
             },
         )
     }
@@ -130,5 +145,97 @@ mod tests {
         let kind = determine_handler(&symlink_path, &context).unwrap();
 
         assert!(matches!(kind, RemovalKind::File));
+    }
+
+    fn notification_store() -> &'static Mutex<Vec<CommandSummary>> {
+        static STORE: OnceLock<Mutex<Vec<CommandSummary>>> = OnceLock::new();
+        STORE.get_or_init(|| Mutex::new(Vec::new()))
+    }
+
+    fn capture_notification(summary: &CommandSummary) -> Result<(), String> {
+        notification_store()
+            .lock()
+            .expect("lock notification store")
+            .push(summary.clone());
+        Ok(())
+    }
+
+    #[test]
+    fn run_notifies_summary_when_success() {
+        // rm 実行成功時に通知へ集計結果を渡すことを確認する。
+        let _guard = TEST_MUTEX.lock().expect("lock test mutex");
+        let path = Path::new("missing-file-for-notify-success");
+        let context_args = Args {
+            allow_dir: false,
+            force: true,
+            recursive: false,
+            path: vec![path.to_path_buf()],
+        };
+        let config = Config {
+            additional_allowed_directories: AdditionalAllowedDirectories {
+                paths: vec![std::path::PathBuf::from("/")],
+            },
+            notify: NotifyConfig { macos_notify: true },
+        };
+
+        notification_store()
+            .lock()
+            .expect("lock notification store")
+            .clear();
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(context_args, config);
+            assert_eq!(exit_code, 0);
+        });
+
+        let captured = notification_store()
+            .lock()
+            .expect("lock notification store");
+        assert_eq!(captured.len(), 1);
+        assert_eq!(
+            captured[0],
+            CommandSummary {
+                kind: CommandKind::Rm,
+                success_count: 1,
+                failure_count: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn run_does_not_notify_when_macos_notify_disabled() {
+        // notify.macos_notify=false の場合は通知を発火しないことを確認する。
+        let _guard = TEST_MUTEX.lock().expect("lock test mutex");
+        let path = Path::new("missing-file-for-notify-disabled");
+        let context_args = Args {
+            allow_dir: false,
+            force: true,
+            recursive: false,
+            path: vec![path.to_path_buf()],
+        };
+        let config = Config {
+            additional_allowed_directories: AdditionalAllowedDirectories {
+                paths: vec![std::path::PathBuf::from("/")],
+            },
+            notify: NotifyConfig {
+                macos_notify: false,
+            },
+        };
+
+        notification_store()
+            .lock()
+            .expect("lock notification store")
+            .clear();
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(context_args, config);
+            assert_eq!(exit_code, 0);
+        });
+
+        let captured = notification_store()
+            .lock()
+            .expect("lock notification store");
+        assert!(
+            captured.is_empty(),
+            "notification should not be emitted when macos_notify is disabled"
+        );
     }
 }

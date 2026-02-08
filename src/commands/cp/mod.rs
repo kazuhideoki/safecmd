@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::config::Config;
+use crate::notifications::{CommandKind, CommandResultCounter};
 use handlers::{CopyKind, ProcessContext};
 
 pub mod args;
@@ -17,10 +18,15 @@ pub fn run(
 ) -> i32 {
     let target_path = Path::new(&target);
     let mut exit_code = 0;
+    let mut counter = CommandResultCounter::new(CommandKind::Cp);
     let context = ProcessContext::new(recursive, no_clobber, config);
 
     if sources.len() > 1 && !target_path.is_dir() {
         eprintln!("cp: target '{target}' is not a directory");
+        counter.record_failures(sources.len());
+        if context.config.notify.macos_notify {
+            counter.notify();
+        }
         return 1;
     }
 
@@ -28,7 +34,14 @@ pub fn run(
         if let Err(msg) = process_source(&source, target_path, &context) {
             eprintln!("{msg}");
             exit_code = 1;
+            counter.record_failure();
+        } else {
+            counter.record_success();
         }
+    }
+
+    if context.config.notify.macos_notify {
+        counter.notify();
     }
 
     exit_code
@@ -65,5 +78,142 @@ fn determine_handler(source_path: &Path, context: &ProcessContext) -> Result<Cop
         }
     } else {
         Ok(CopyKind::UnsupportedType)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{AdditionalAllowedDirectories, Config, NotifyConfig};
+    use crate::notifications::{self, CommandKind, CommandSummary};
+    use std::cell::RefCell;
+    use std::fs;
+    use std::thread_local;
+    use tempfile::TempDir;
+
+    thread_local! {
+        static NOTIFICATION_STORE: RefCell<Vec<CommandSummary>> = const { RefCell::new(Vec::new()) };
+    }
+
+    fn capture_notification(summary: &CommandSummary) -> Result<(), String> {
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().push(summary.clone());
+        });
+        Ok(())
+    }
+
+    fn allow_all_config(macos_notify: bool) -> Config {
+        Config {
+            additional_allowed_directories: AdditionalAllowedDirectories {
+                paths: vec![std::path::PathBuf::from("/")],
+            },
+            notify: NotifyConfig { macos_notify },
+        }
+    }
+
+    #[test]
+    fn run_notifies_summary_when_success() {
+        // cp 実行成功時に通知へ集計結果を渡すことを確認する。
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let source = temp_dir.path().join("source.txt");
+        let target = temp_dir.path().join("target.txt");
+        fs::write(&source, "hello").expect("write source");
+
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().clear();
+        });
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(
+                vec![source.to_string_lossy().to_string()],
+                target.to_string_lossy().to_string(),
+                false,
+                false,
+                false,
+                allow_all_config(true),
+            );
+            assert_eq!(exit_code, 0);
+        });
+
+        let captured = NOTIFICATION_STORE.with(|store| store.borrow().clone());
+        assert_eq!(captured.len(), 1);
+        assert_eq!(
+            captured[0],
+            CommandSummary {
+                kind: CommandKind::Cp,
+                success_count: 1,
+                failure_count: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn run_notifies_all_sources_as_failure_when_multi_source_target_is_not_directory() {
+        // 複数ソース指定でターゲットがディレクトリでない場合に全ソースを失敗件数へ計上することを確認する。
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let source1 = temp_dir.path().join("source1.txt");
+        let source2 = temp_dir.path().join("source2.txt");
+        let target = temp_dir.path().join("target.txt");
+        fs::write(&source1, "one").expect("write source1");
+        fs::write(&source2, "two").expect("write source2");
+        fs::write(&target, "target").expect("write target");
+
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().clear();
+        });
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(
+                vec![
+                    source1.to_string_lossy().to_string(),
+                    source2.to_string_lossy().to_string(),
+                ],
+                target.to_string_lossy().to_string(),
+                false,
+                false,
+                false,
+                allow_all_config(true),
+            );
+            assert_eq!(exit_code, 1);
+        });
+
+        let captured = NOTIFICATION_STORE.with(|store| store.borrow().clone());
+        assert_eq!(captured.len(), 1);
+        assert_eq!(
+            captured[0],
+            CommandSummary {
+                kind: CommandKind::Cp,
+                success_count: 0,
+                failure_count: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn run_does_not_notify_when_macos_notify_disabled() {
+        // notify.macos_notify=false の場合は通知を発火しないことを確認する。
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let source = temp_dir.path().join("source.txt");
+        let target = temp_dir.path().join("target.txt");
+        fs::write(&source, "hello").expect("write source");
+
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().clear();
+        });
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(
+                vec![source.to_string_lossy().to_string()],
+                target.to_string_lossy().to_string(),
+                false,
+                false,
+                false,
+                allow_all_config(false),
+            );
+            assert_eq!(exit_code, 0);
+        });
+
+        let captured = NOTIFICATION_STORE.with(|store| store.borrow().clone());
+        assert!(
+            captured.is_empty(),
+            "notification should not be emitted when macos_notify is disabled"
+        );
     }
 }
