@@ -66,13 +66,7 @@ impl Config {
     /// # 判定ルール
     /// - 実行時のカレントディレクトリ配下は常に許可
     /// - `additional_allowed_directories.paths` 配下は追加で許可
-    /// - `SAFECMD_DISABLE_ALLOWED_DIRECTORIES` が設定されている場合は常に許可
     pub fn is_path_allowed(&self, path: &Path) -> bool {
-        // Check if directory restrictions are disabled via environment variable
-        if std::env::var("SAFECMD_DISABLE_ALLOWED_DIRECTORIES").is_ok() {
-            return true;
-        }
-
         let Some(resolved_target) = Self::resolve_target_path(path) else {
             return false;
         };
