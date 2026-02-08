@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+
+const DEFAULT_CONFIG_TEMPLATE: &str = include_str!("../../config.example.toml");
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -240,6 +241,7 @@ impl Config {
                 .map_err(|e| format!("Failed to create config directory: {e}"))?;
         }
 
+<<<<<<< HEAD
         let default_content = r#"# SafeCmd configuration file
 # Current working directory is always allowed.
 # Add extra allowed directories below if needed.
@@ -260,6 +262,9 @@ macos_notify = false
             .map_err(|e| format!("Failed to create config file: {e}"))?;
 
         file.write_all(default_content.as_bytes())
+=======
+        fs::write(config_path, DEFAULT_CONFIG_TEMPLATE)
+>>>>>>> main
             .map_err(|e| format!("Failed to write default config: {e}"))
     }
 }
@@ -545,5 +550,22 @@ paths = []
             vec![PathBuf::from("/")],
             "allow-all scope should be enabled only by explicit SAFECMD_TEST_MODE=1"
         );
+    }
+
+    #[test]
+    fn test_create_default_config_uses_example_template() {
+        // 既定設定の生成内容が `config.example.toml` と一致することを確認する。
+        let _guard = TEST_MUTEX.lock().unwrap();
+        setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("generated").join("config.toml");
+
+        Config::create_default_config(&config_path).unwrap();
+
+        let generated = fs::read_to_string(&config_path).unwrap();
+        let template_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("config.example.toml");
+        let expected = fs::read_to_string(template_path).unwrap();
+        assert_eq!(generated, expected);
     }
 }
