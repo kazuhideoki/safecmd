@@ -346,23 +346,15 @@ mod tests {
         std::env::set_current_dir(original).unwrap();
     }
 
-<<<<<<< HEAD
     #[cfg(unix)]
     #[test]
     fn test_is_path_allowed_uses_symlink_path_instead_of_target() {
         // シンボリックリンクはリンク先ではなくリンク自身の配置場所で許可判定することを確認する。
         use std::os::unix::fs::symlink;
-
-=======
-    #[test]
-    fn test_load_allows_empty_additional_paths() {
-        // `paths = []` を許容し、追加許可なし設定として読み込めることを確認する。
->>>>>>> main
         let _guard = TEST_MUTEX.lock().unwrap();
         setup_test_env();
 
         let temp_dir = TempDir::new().unwrap();
-<<<<<<< HEAD
         let cwd = temp_dir.path().join("workspace");
         let outside = temp_dir.path().join("outside");
 
@@ -382,7 +374,15 @@ mod tests {
         assert!(config.is_path_allowed(Path::new("secret-link.txt")));
 
         std::env::set_current_dir(original).unwrap();
-=======
+    }
+
+    #[test]
+    fn test_load_allows_empty_additional_paths() {
+        // `paths = []` を許容し、追加許可なし設定として読み込めることを確認する。
+        let _guard = TEST_MUTEX.lock().unwrap();
+        setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.toml");
         fs::write(
             &config_path,
@@ -422,6 +422,5 @@ paths = ["relative/path"]
 
         let err = Config::load().unwrap_err();
         assert!(err.contains("must be an absolute path"));
->>>>>>> main
     }
 }
