@@ -151,8 +151,9 @@ paths = [
 
 ### `rm -r` の挙動（GNU 互換）
 
-- [ ] 事前全走査での all-or-nothing は採用しないことを明記する
-- [ ] 許可範囲外を含む場合は、削除可能な対象は処理継続しつつエラーを返す仕様を明記する
-- [ ] 一部成功・一部失敗時の終了コード（非 0）を明記・テストする
+- [x] 事前全走査での all-or-nothing は採用しないことを明記する
+- [x] 許可範囲外を含む場合は、削除可能な対象は処理継続しつつエラーを返す仕様を明記する
+- [x] 一部成功・一部失敗時の終了コード（非 0）を明記・テストする
+  - 検証テスト: `tests/config_scope_integration.rs` の `rm_recursive_continues_when_one_path_is_outside_allowed_scope`
 
 - （参考）`patterns` や `ignore` ベースの保護機能は現状未実装。現在の保護は許可ディレクトリ制御のみ。
