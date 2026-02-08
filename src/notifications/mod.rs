@@ -34,6 +34,54 @@ impl CommandSummary {
     }
 }
 
+/// コマンド実行中の成功・失敗件数を集計する。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandResultCounter {
+    kind: CommandKind,
+    success_count: usize,
+    failure_count: usize,
+}
+
+impl CommandResultCounter {
+    /// コマンド種別に紐づく集計器を生成する。
+    pub fn new(kind: CommandKind) -> Self {
+        Self {
+            kind,
+            success_count: 0,
+            failure_count: 0,
+        }
+    }
+
+    /// 成功件数を1件加算する。
+    pub fn record_success(&mut self) {
+        self.success_count += 1;
+    }
+
+    /// 失敗件数を1件加算する。
+    pub fn record_failure(&mut self) {
+        self.failure_count += 1;
+    }
+
+    /// 失敗件数を任意件数加算する。
+    pub fn record_failures(&mut self, count: usize) {
+        self.failure_count += count;
+    }
+
+    /// 現在の集計状態から通知用サマリを生成する。
+    pub fn summary(&self) -> CommandSummary {
+        CommandSummary {
+            kind: self.kind,
+            success_count: self.success_count,
+            failure_count: self.failure_count,
+        }
+    }
+
+    /// 現在の集計状態を通知する。
+    pub fn notify(&self) {
+        notify_command_result(&self.summary());
+    }
+}
+
 /// 実行結果に応じた通知を発火する。
 pub fn notify_command_result(summary: &CommandSummary) {
     #[cfg(test)]
@@ -123,9 +171,68 @@ fn dispatch(_summary: &CommandSummary) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+    use std::thread_local;
 
     fn capture_noop(_summary: &CommandSummary) -> Result<(), String> {
         Ok(())
+    }
+
+    thread_local! {
+        static SUMMARY_STORE: RefCell<Vec<CommandSummary>> = const { RefCell::new(Vec::new()) };
+    }
+
+    fn capture_summary(summary: &CommandSummary) -> Result<(), String> {
+        SUMMARY_STORE.with(|store| {
+            store.borrow_mut().push(summary.clone());
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn command_result_counter_builds_summary_from_recorded_counts() {
+        // 集計器へ記録した成功・失敗件数がサマリへ正しく反映されることを確認する。
+        let mut counter = CommandResultCounter::new(CommandKind::Rm);
+        counter.record_success();
+        counter.record_success();
+        counter.record_failure();
+        counter.record_failures(3);
+
+        assert_eq!(
+            counter.summary(),
+            CommandSummary {
+                kind: CommandKind::Rm,
+                success_count: 2,
+                failure_count: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn command_result_counter_notifies_current_summary() {
+        // 集計器の notify が現在の集計結果を通知処理へ渡すことを確認する。
+        let mut counter = CommandResultCounter::new(CommandKind::Cp);
+        counter.record_success();
+        counter.record_failure();
+
+        SUMMARY_STORE.with(|store| {
+            store.borrow_mut().clear();
+        });
+
+        with_test_notifier(capture_summary, || {
+            counter.notify();
+        });
+
+        let captured = SUMMARY_STORE.with(|store| store.borrow().clone());
+        assert_eq!(captured.len(), 1);
+        assert_eq!(
+            captured[0],
+            CommandSummary {
+                kind: CommandKind::Cp,
+                success_count: 1,
+                failure_count: 1,
+            }
+        );
     }
 
     #[test]

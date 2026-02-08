@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::config::Config;
-use crate::notifications::{self, CommandKind, CommandSummary};
+use crate::notifications::{CommandKind, CommandResultCounter};
 use handlers::{CopyKind, ProcessContext};
 
 pub mod args;
@@ -18,17 +18,13 @@ pub fn run(
 ) -> i32 {
     let target_path = Path::new(&target);
     let mut exit_code = 0;
-    let mut success_count = 0usize;
-    let mut failure_count = 0usize;
+    let mut counter = CommandResultCounter::new(CommandKind::Cp);
     let context = ProcessContext::new(recursive, no_clobber, config);
 
     if sources.len() > 1 && !target_path.is_dir() {
         eprintln!("cp: target '{target}' is not a directory");
-        notifications::notify_command_result(&CommandSummary {
-            kind: CommandKind::Cp,
-            success_count: 0,
-            failure_count: sources.len(),
-        });
+        counter.record_failures(sources.len());
+        counter.notify();
         return 1;
     }
 
@@ -36,17 +32,13 @@ pub fn run(
         if let Err(msg) = process_source(&source, target_path, &context) {
             eprintln!("{msg}");
             exit_code = 1;
-            failure_count += 1;
+            counter.record_failure();
         } else {
-            success_count += 1;
+            counter.record_success();
         }
     }
 
-    notifications::notify_command_result(&CommandSummary {
-        kind: CommandKind::Cp,
-        success_count,
-        failure_count,
-    });
+    counter.notify();
 
     exit_code
 }

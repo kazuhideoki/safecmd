@@ -2,7 +2,7 @@ pub mod args;
 pub mod handlers;
 
 use crate::config::Config;
-use crate::notifications::{self, CommandKind, CommandSummary};
+use crate::notifications::{CommandKind, CommandResultCounter};
 use args::Args;
 use handlers::{ProcessContext, RemovalKind};
 use std::path::Path;
@@ -10,25 +10,20 @@ use std::path::Path;
 /// rm コマンド全体を実行し、各パスの処理結果に応じて終了コードを決定する。
 pub fn run(args: Args, config: Config) -> i32 {
     let mut exit_code = 0;
-    let mut success_count = 0usize;
-    let mut failure_count = 0usize;
+    let mut counter = CommandResultCounter::new(CommandKind::Rm);
     let context = ProcessContext::new(args, config);
 
     for path in &context.args.path {
         if let Err(msg) = process_path(path, &context) {
             eprintln!("{msg}");
             exit_code = 1;
-            failure_count += 1;
+            counter.record_failure();
         } else {
-            success_count += 1;
+            counter.record_success();
         }
     }
 
-    notifications::notify_command_result(&CommandSummary {
-        kind: CommandKind::Rm,
-        success_count,
-        failure_count,
-    });
+    counter.notify();
 
     exit_code
 }
