@@ -136,6 +136,7 @@ paths = [
 
 ### 安全弁用途での追加 TODO（2026-02-08 確認）
 
-- [ ] `cargo run` 等で有効になり得るテストモード全許可（`CARGO_MANIFEST_DIR` + `CARGO`）を安全弁運用で禁止し、起動条件を明文化する
-- [ ] 許可範囲の基準を実行時の `cwd` 依存だけにしない（固定ルート指定や明示的な実行ルート制約を検討する）
-  > > > > > > > check_cp
+- [x] `cargo run` 等で有効になり得るテストモード全許可（`CARGO_MANIFEST_DIR` + `CARGO`）を安全弁運用で禁止し、起動条件を明文化する
+  - 全許可モードは `SAFECMD_TEST_MODE=1` の明示指定時のみ有効化
+  - `SAFECMD_DISABLE_TEST_MODE` 指定時は `SAFECMD_TEST_MODE=1` でも通常モードを強制
+  - `CARGO_MANIFEST_DIR` / `CARGO` の存在による自動全許可は行わない

@@ -24,26 +24,17 @@ impl Default for Config {
 impl Config {
     /// 設定ファイルを読み込み、実行時の制約設定を構築する。
     ///
-    /// # Behavior
-    /// 1. In test mode (when CARGO_MANIFEST_DIR is set), allows all paths unless disabled
-    /// 2. Uses SAFECMD_CONFIG_PATH environment variable if set
-    /// 3. Otherwise, looks for config at ~/.config/safecmd/config.toml
-    /// 4. Creates a default config file if none exists
+    /// # 判定ルール
+    /// 1. `SAFECMD_TEST_MODE=1` かつ `SAFECMD_DISABLE_TEST_MODE` 未指定なら全許可モード
+    /// 2. それ以外は `SAFECMD_CONFIG_PATH` または `~/.config/safecmd/config.toml` を使用
+    /// 3. 設定ファイルが存在しない場合はデフォルト設定を作成
     pub fn load() -> Result<Self, String> {
-        // Check if test mode should be disabled
-        if std::env::var("SAFECMD_DISABLE_TEST_MODE").is_err() {
-            // Check if running in test mode by looking for cargo test environment
-            if std::env::var("CARGO_MANIFEST_DIR").is_ok() && std::env::var("CARGO").is_ok() {
-                // If SAFECMD_CONFIG_PATH is set, still load from the config file even in test mode
-                if std::env::var("SAFECMD_CONFIG_PATH").is_err() {
-                    // Return a config that allows all paths for testing
-                    return Ok(Self {
-                        additional_allowed_directories: AdditionalAllowedDirectories {
-                            paths: vec![PathBuf::from("/")],
-                        },
-                    });
-                }
-            }
+        if Self::is_explicit_allow_all_test_mode_enabled() {
+            return Ok(Self {
+                additional_allowed_directories: AdditionalAllowedDirectories {
+                    paths: vec![PathBuf::from("/")],
+                },
+            });
         }
 
         let config_path = Self::config_path()?;
@@ -60,6 +51,17 @@ impl Config {
         config.validate()?;
 
         Ok(config)
+    }
+
+    /// 明示指定されたテストモード（全許可）の有効化可否を判定する。
+    ///
+    /// `CARGO_*` の自動推測は行わず、`SAFECMD_TEST_MODE=1` のみを受け付ける。
+    fn is_explicit_allow_all_test_mode_enabled() -> bool {
+        if std::env::var("SAFECMD_DISABLE_TEST_MODE").is_ok() {
+            return false;
+        }
+
+        matches!(std::env::var("SAFECMD_TEST_MODE").as_deref(), Ok("1"))
     }
 
     /// 読み込んだ設定値の整合性を検証する。
@@ -267,6 +269,18 @@ mod tests {
         }
     }
 
+    /// テストで使用する環境変数をクリアし、相互干渉を防ぐ。
+    fn clear_test_related_env() {
+        unsafe {
+            std::env::remove_var("SAFECMD_DISABLE_TEST_MODE");
+            std::env::remove_var("SAFECMD_TEST_MODE");
+            std::env::remove_var("SAFECMD_CONFIG_PATH");
+            std::env::remove_var("CARGO_MANIFEST_DIR");
+            std::env::remove_var("CARGO");
+            std::env::remove_var("HOME");
+        }
+    }
+
     #[test]
     fn test_is_path_allowed_with_current_directory_scope() {
         let _guard = TEST_MUTEX.lock().unwrap();
@@ -422,5 +436,71 @@ paths = ["relative/path"]
 
         let err = Config::load().unwrap_err();
         assert!(err.contains("must be an absolute path"));
+    }
+
+    #[test]
+    fn test_load_does_not_enable_allow_all_from_cargo_env_only() {
+        // CARGO 環境変数だけでは全許可モードにならないことを確認する。
+        let _guard = TEST_MUTEX.lock().unwrap();
+        clear_test_related_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let home_dir = temp_dir.path().join("home");
+        let config_dir = home_dir.join(".config").join("safecmd");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(
+            config_dir.join("config.toml"),
+            r#"[additional_allowed_directories]
+paths = []
+"#,
+        )
+        .unwrap();
+
+        unsafe {
+            std::env::set_var("HOME", &home_dir);
+            std::env::set_var("CARGO_MANIFEST_DIR", temp_dir.path());
+            std::env::set_var("CARGO", "cargo");
+        }
+
+        let loaded = Config::load().unwrap();
+        assert!(
+            loaded
+                .additional_allowed_directories
+                .paths
+                .iter()
+                .all(|path| path != Path::new("/")),
+            "allow-all scope must not be enabled by CARGO_* environment only"
+        );
+    }
+
+    #[test]
+    fn test_load_enables_allow_all_only_with_explicit_test_mode() {
+        // 明示的なテストモード指定時のみ全許可モードを有効化できることを確認する。
+        let _guard = TEST_MUTEX.lock().unwrap();
+        clear_test_related_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let home_dir = temp_dir.path().join("home");
+        let config_dir = home_dir.join(".config").join("safecmd");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(
+            config_dir.join("config.toml"),
+            r#"[additional_allowed_directories]
+paths = []
+"#,
+        )
+        .unwrap();
+
+        unsafe {
+            std::env::set_var("HOME", &home_dir);
+            std::env::set_var("SAFECMD_TEST_MODE", "1");
+        }
+
+        let loaded = Config::load().unwrap();
+        assert_eq!(
+            loaded.additional_allowed_directories.paths,
+            vec![PathBuf::from("/")],
+            "allow-all scope should be enabled only by explicit SAFECMD_TEST_MODE=1"
+        );
     }
 }
