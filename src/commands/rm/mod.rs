@@ -23,7 +23,9 @@ pub fn run(args: Args, config: Config) -> i32 {
         }
     }
 
-    counter.notify();
+    if context.config.notify.macos_notify {
+        counter.notify();
+    }
 
     exit_code
 }
@@ -85,12 +87,15 @@ fn determine_handler(path: &Path, context: &ProcessContext) -> Result<RemovalKin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AdditionalAllowedDirectories, Config};
+    use crate::config::{AdditionalAllowedDirectories, Config, NotifyConfig};
     use crate::notifications::{self, CommandKind, CommandSummary};
     #[cfg(unix)]
     use std::os::unix::fs::symlink;
     use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
+
+    // 共有通知ストアを使うテストの競合を防ぐため逐次実行する。
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
     /// テスト用の最小コンテキストを生成する。
     fn build_context(recursive: bool) -> ProcessContext {
@@ -105,6 +110,7 @@ mod tests {
                 additional_allowed_directories: AdditionalAllowedDirectories {
                     paths: vec![std::path::PathBuf::from("/")],
                 },
+                notify: NotifyConfig { macos_notify: true },
             },
         )
     }
@@ -157,6 +163,7 @@ mod tests {
     #[test]
     fn run_notifies_summary_when_success() {
         // rm 実行成功時に通知へ集計結果を渡すことを確認する。
+        let _guard = TEST_MUTEX.lock().expect("lock test mutex");
         let path = Path::new("missing-file-for-notify-success");
         let context_args = Args {
             allow_dir: false,
@@ -168,6 +175,7 @@ mod tests {
             additional_allowed_directories: AdditionalAllowedDirectories {
                 paths: vec![std::path::PathBuf::from("/")],
             },
+            notify: NotifyConfig { macos_notify: true },
         };
 
         notification_store()
@@ -190,6 +198,44 @@ mod tests {
                 success_count: 1,
                 failure_count: 0,
             }
+        );
+    }
+
+    #[test]
+    fn run_does_not_notify_when_macos_notify_disabled() {
+        // notify.macos_notify=false の場合は通知を発火しないことを確認する。
+        let _guard = TEST_MUTEX.lock().expect("lock test mutex");
+        let path = Path::new("missing-file-for-notify-disabled");
+        let context_args = Args {
+            allow_dir: false,
+            force: true,
+            recursive: false,
+            path: vec![path.to_path_buf()],
+        };
+        let config = Config {
+            additional_allowed_directories: AdditionalAllowedDirectories {
+                paths: vec![std::path::PathBuf::from("/")],
+            },
+            notify: NotifyConfig {
+                macos_notify: false,
+            },
+        };
+
+        notification_store()
+            .lock()
+            .expect("lock notification store")
+            .clear();
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(context_args, config);
+            assert_eq!(exit_code, 0);
+        });
+
+        let captured = notification_store()
+            .lock()
+            .expect("lock notification store");
+        assert!(
+            captured.is_empty(),
+            "notification should not be emitted when macos_notify is disabled"
         );
     }
 }

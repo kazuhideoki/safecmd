@@ -6,6 +6,8 @@ use std::path::{Component, Path, PathBuf};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub additional_allowed_directories: AdditionalAllowedDirectories,
+    #[serde(default)]
+    pub notify: NotifyConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -13,10 +15,17 @@ pub struct AdditionalAllowedDirectories {
     pub paths: Vec<PathBuf>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct NotifyConfig {
+    pub macos_notify: bool,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             additional_allowed_directories: AdditionalAllowedDirectories { paths: vec![] },
+            notify: NotifyConfig::default(),
         }
     }
 }
@@ -34,6 +43,7 @@ impl Config {
                 additional_allowed_directories: AdditionalAllowedDirectories {
                     paths: vec![PathBuf::from("/")],
                 },
+                notify: NotifyConfig::default(),
             });
         }
 
@@ -241,6 +251,9 @@ paths = [
     # Example: "/Users/yourname/Documents",
 ]
 
+[notify]
+macos_notify = false
+
 "#;
 
         let mut file = fs::File::create(config_path)
@@ -322,6 +335,7 @@ mod tests {
             additional_allowed_directories: AdditionalAllowedDirectories {
                 paths: vec![external.clone()],
             },
+            notify: NotifyConfig::default(),
         };
 
         assert!(config.is_path_allowed(&external_file));
@@ -353,6 +367,7 @@ mod tests {
             additional_allowed_directories: AdditionalAllowedDirectories {
                 paths: vec![external],
             },
+            notify: NotifyConfig::default(),
         };
 
         assert!(!config.is_path_allowed(&forbidden_file));
@@ -412,6 +427,34 @@ paths = []
 
         let loaded = Config::load().unwrap();
         assert!(loaded.additional_allowed_directories.paths.is_empty());
+        assert!(!loaded.notify.macos_notify);
+    }
+
+    #[test]
+    fn test_load_accepts_notify_macos_notify_setting() {
+        // notify.macos_notify を設定ファイルから読み込めることを確認する。
+        let _guard = TEST_MUTEX.lock().unwrap();
+        setup_test_env();
+
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+        fs::write(
+            &config_path,
+            r#"[additional_allowed_directories]
+paths = []
+
+[notify]
+macos_notify = true
+"#,
+        )
+        .unwrap();
+
+        unsafe {
+            std::env::set_var("SAFECMD_CONFIG_PATH", &config_path);
+        }
+
+        let loaded = Config::load().unwrap();
+        assert!(loaded.notify.macos_notify);
     }
 
     #[test]

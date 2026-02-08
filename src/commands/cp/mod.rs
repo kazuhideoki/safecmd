@@ -24,7 +24,9 @@ pub fn run(
     if sources.len() > 1 && !target_path.is_dir() {
         eprintln!("cp: target '{target}' is not a directory");
         counter.record_failures(sources.len());
-        counter.notify();
+        if context.config.notify.macos_notify {
+            counter.notify();
+        }
         return 1;
     }
 
@@ -38,7 +40,9 @@ pub fn run(
         }
     }
 
-    counter.notify();
+    if context.config.notify.macos_notify {
+        counter.notify();
+    }
 
     exit_code
 }
@@ -80,7 +84,7 @@ fn determine_handler(source_path: &Path, context: &ProcessContext) -> Result<Cop
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AdditionalAllowedDirectories, Config};
+    use crate::config::{AdditionalAllowedDirectories, Config, NotifyConfig};
     use crate::notifications::{self, CommandKind, CommandSummary};
     use std::cell::RefCell;
     use std::fs;
@@ -98,11 +102,12 @@ mod tests {
         Ok(())
     }
 
-    fn allow_all_config() -> Config {
+    fn allow_all_config(macos_notify: bool) -> Config {
         Config {
             additional_allowed_directories: AdditionalAllowedDirectories {
                 paths: vec![std::path::PathBuf::from("/")],
             },
+            notify: NotifyConfig { macos_notify },
         }
     }
 
@@ -124,7 +129,7 @@ mod tests {
                 false,
                 false,
                 false,
-                allow_all_config(),
+                allow_all_config(true),
             );
             assert_eq!(exit_code, 0);
         });
@@ -165,7 +170,7 @@ mod tests {
                 false,
                 false,
                 false,
-                allow_all_config(),
+                allow_all_config(true),
             );
             assert_eq!(exit_code, 1);
         });
@@ -179,6 +184,36 @@ mod tests {
                 success_count: 0,
                 failure_count: 2,
             }
+        );
+    }
+
+    #[test]
+    fn run_does_not_notify_when_macos_notify_disabled() {
+        // notify.macos_notify=false の場合は通知を発火しないことを確認する。
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let source = temp_dir.path().join("source.txt");
+        let target = temp_dir.path().join("target.txt");
+        fs::write(&source, "hello").expect("write source");
+
+        NOTIFICATION_STORE.with(|store| {
+            store.borrow_mut().clear();
+        });
+        notifications::with_test_notifier(capture_notification, || {
+            let exit_code = run(
+                vec![source.to_string_lossy().to_string()],
+                target.to_string_lossy().to_string(),
+                false,
+                false,
+                false,
+                allow_all_config(false),
+            );
+            assert_eq!(exit_code, 0);
+        });
+
+        let captured = NOTIFICATION_STORE.with(|store| store.borrow().clone());
+        assert!(
+            captured.is_empty(),
+            "notification should not be emitted when macos_notify is disabled"
         );
     }
 }

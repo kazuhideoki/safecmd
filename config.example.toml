@@ -8,3 +8,6 @@ paths = [
     # "/home/user/shared",
     # "/Users/yourname/Documents",
 ]
+
+[notify]
+macos_notify = false
