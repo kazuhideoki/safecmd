@@ -59,9 +59,16 @@ SafeCmd supports several environment variables for configuration and testing:
 - **Example**: `SAFECMD_CONFIG_PATH=/custom/path/config.toml rm file.txt`
 
 ### `SAFECMD_DISABLE_TEST_MODE`
-- **Purpose**: Disable automatic test mode detection
-- **Effect**: Prevents allowing all paths when running under `cargo test`
-- **Example**: `SAFECMD_DISABLE_TEST_MODE=1 cargo test`
+- **Purpose**: Force-disable explicit test mode
+- **Effect**: Ignores `SAFECMD_TEST_MODE=1` and keeps normal scope restrictions
+- **Example**: `SAFECMD_DISABLE_TEST_MODE=1 SAFECMD_TEST_MODE=1 rm file.txt`
+
+### `SAFECMD_TEST_MODE`
+- **Purpose**: Explicitly enable allow-all mode for tests only
+- **Effect**: Only `SAFECMD_TEST_MODE=1` enables allow-all (`/`) scope
+- **Example**: `SAFECMD_TEST_MODE=1 cargo test`
+
+`CARGO_MANIFEST_DIR` and `CARGO` are not used for automatic test mode detection.
 
 ## Flag Behavior vs GNU Coreutils
 

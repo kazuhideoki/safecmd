@@ -4,6 +4,13 @@ use std::fs::{self, File};
 use std::process::Command;
 use tempfile::tempdir;
 
+/// rm バイナリ実行時に明示テストモードを付与したコマンドを生成する。
+fn rm_command() -> Command {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    cmd.env("SAFECMD_TEST_MODE", "1");
+    cmd
+}
+
 /// rm 実行結果を確認し、trash が使えない環境では成功系テストをスキップ扱いにする。
 fn assert_rm_success_or_skip(cmd: &mut Command) -> bool {
     let output = cmd.output().expect("run rm");
@@ -27,7 +34,7 @@ fn file_is_trashed() {
     File::create(&file_path).expect("create file");
 
     // run the binary
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg(&file_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -45,7 +52,7 @@ fn directory_without_flags_fails() {
     fs::create_dir(&dir_path).expect("create directory");
 
     // run the binary without flags (should fail)
-    Command::new(assert_cmd::cargo::cargo_bin!("rm"))
+    rm_command()
         .arg(&dir_path)
         .assert()
         .failure()
@@ -63,7 +70,7 @@ fn empty_directory_with_d_flag() {
     fs::create_dir(&dir_path).expect("create directory");
 
     // run the binary with -d flag
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-d").arg(&dir_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -85,7 +92,7 @@ fn non_empty_directory_with_d_flag_fails() {
     File::create(dir_path.join("file.txt")).expect("create file");
 
     // run the binary with -d flag (should fail)
-    Command::new(assert_cmd::cargo::cargo_bin!("rm"))
+    rm_command()
         .arg("-d")
         .arg(&dir_path)
         .assert()
@@ -117,7 +124,7 @@ fn directory_with_r_flag() {
     File::create(sub_dir.join("file3.txt")).expect("create file3");
 
     // run the binary with -r flag
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-r").arg(&dir_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -144,7 +151,7 @@ fn directory_with_uppercase_r_flag() {
     fs::create_dir(&sub_dir).expect("create subdirectory");
     File::create(sub_dir.join("file3.txt")).expect("create file3");
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-R").arg(&dir_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -159,7 +166,7 @@ fn directory_with_uppercase_r_flag() {
 #[test]
 fn non_existent_file_without_f_flag_fails() {
     // run the binary on a non-existent file without -f
-    Command::new(assert_cmd::cargo::cargo_bin!("rm"))
+    rm_command()
         .arg("non_existent_file.txt")
         .assert()
         .failure()
@@ -169,7 +176,7 @@ fn non_existent_file_without_f_flag_fails() {
 #[test]
 fn non_existent_file_with_f_flag_succeeds() {
     // run the binary on a non-existent file with -f
-    Command::new(assert_cmd::cargo::cargo_bin!("rm"))
+    rm_command()
         .arg("-f")
         .arg("non_existent_file.txt")
         .assert()
@@ -184,7 +191,7 @@ fn mixed_files_with_f_flag() {
     File::create(&existing_file).expect("create file");
 
     // run the binary with -f on both existing and non-existent files
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-f")
         .arg(&existing_file)
         .arg("non_existent.txt")
@@ -206,7 +213,7 @@ fn combined_flags_rf() {
     fs::create_dir(&dir_path).expect("create directory");
     File::create(dir_path.join("file.txt")).expect("create file");
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-rf").arg(&dir_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -223,7 +230,7 @@ fn combined_flags_uppercase_rf() {
     fs::create_dir(&dir_path).expect("create directory");
     File::create(dir_path.join("file.txt")).expect("create file");
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-Rf").arg(&dir_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -240,7 +247,7 @@ fn combined_flags_fr() {
     fs::create_dir(&dir_path).expect("create directory");
     File::create(dir_path.join("file.txt")).expect("create file");
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-fr").arg(&dir_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -256,7 +263,7 @@ fn combined_flags_df() {
     let empty_dir = temp_dir.path().join("empty_dir");
     fs::create_dir(&empty_dir).expect("create directory");
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-df").arg(&empty_dir);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -276,7 +283,7 @@ fn combined_flags_drf() {
     fs::create_dir(&dir_path).expect("create directory");
     File::create(dir_path.join("file.txt")).expect("create file");
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-drf").arg(&dir_path);
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
@@ -292,7 +299,7 @@ fn combined_flags_frd() {
     let existing_dir = temp_dir.path().join("existing");
     fs::create_dir(&existing_dir).expect("create directory");
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
+    let mut cmd = rm_command();
     cmd.arg("-frd").arg(&existing_dir).arg("non_existent_dir");
     if !assert_rm_success_or_skip(&mut cmd) {
         return;
