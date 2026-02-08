@@ -140,6 +140,4 @@ paths = [
   - 全許可モードは `SAFECMD_TEST_MODE=1` の明示指定時のみ有効化
   - `SAFECMD_DISABLE_TEST_MODE` 指定時は `SAFECMD_TEST_MODE=1` でも通常モードを強制
   - `CARGO_MANIFEST_DIR` / `CARGO` の存在による自動全許可は行わない
-- [ ] 許可範囲の基準を実行時の `cwd` 依存だけにしない（固定ルート指定や明示的な実行ルート制約を検討する）
 - [ ] `trash` 依存の削除処理が GUI 非依存環境で失敗する場合の運用方針（失敗時ポリシー）を定義する
-  > > > > > > > check_cp
