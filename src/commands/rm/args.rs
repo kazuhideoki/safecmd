@@ -12,7 +12,7 @@ pub struct Args {
     #[arg(short = 'f')]
     pub force: bool,
     /// Recursively remove directories
-    #[arg(short = 'r')]
+    #[arg(short = 'R', short_alias = 'r')]
     pub recursive: bool,
     /// Paths to files or directories to trash
     pub path: Vec<PathBuf>,
