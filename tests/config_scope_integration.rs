@@ -1,6 +1,7 @@
-use assert_cmd::Command;
+use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::fs;
+use std::process::Command;
 use tempfile::TempDir;
 
 /// 設定ファイルを作成する。
@@ -29,21 +30,41 @@ paths = [{}]
     config_path
 }
 
+/// rm 実行結果を確認し、trash が使えない環境では成功系テストをスキップ扱いにする。
+fn assert_rm_success_or_skip(cmd: &mut Command) -> bool {
+    let output = cmd.output().expect("run rm");
+    if output.status.success() {
+        return true;
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if stderr.contains("Error during a `trash` operation") {
+        return false;
+    }
+
+    panic!("rm failed unexpectedly: {stderr}");
+}
+
 #[test]
 fn rm_allows_current_directory_scope_without_additional_paths() {
     // カレントディレクトリ配下は追加設定なしでも削除できることを確認する。
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
     let config_path = write_config(temp_path, &[]);
+    let target_file = temp_path.join("target.txt");
+    fs::write(&target_file, "content").unwrap();
 
-    let mut cmd = Command::cargo_bin("rm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(temp_path)
         .arg("-f")
-        .arg("target.txt")
-        .assert()
-        .success();
+        .arg("target.txt");
+    if !assert_rm_success_or_skip(&mut cmd) {
+        return;
+    }
+
+    assert!(!target_file.exists());
 }
 
 #[test]
@@ -58,17 +79,21 @@ fn rm_allows_path_in_additional_allowed_directories() {
     fs::create_dir(&external_dir).unwrap();
 
     let external_file = external_dir.join("from_external.txt");
+    fs::write(&external_file, "content").unwrap();
 
     let config_path = write_config(temp_path, std::slice::from_ref(&external_dir));
 
-    let mut cmd = Command::cargo_bin("rm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&workspace_dir)
         .arg("-f")
-        .arg(&external_file)
-        .assert()
-        .success();
+        .arg(&external_file);
+    if !assert_rm_success_or_skip(&mut cmd) {
+        return;
+    }
+
+    assert!(!external_file.exists());
 }
 
 #[test]
@@ -88,7 +113,7 @@ fn rm_denies_path_outside_current_and_additional_scopes() {
 
     let config_path = write_config(temp_path, std::slice::from_ref(&additional_dir));
 
-    let mut cmd = Command::cargo_bin("rm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&workspace_dir)
@@ -111,7 +136,7 @@ fn rm_denies_parent_traversal_outside_current_directory_scope() {
 
     let config_path = write_config(temp_path, &[]);
 
-    let mut cmd = Command::cargo_bin("rm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&subdir)
@@ -138,7 +163,7 @@ fn cp_allows_source_in_additional_allowed_directories() {
 
     let config_path = write_config(temp_path, std::slice::from_ref(&external_dir));
 
-    let mut cmd = Command::cargo_bin("cp").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cp"));
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&workspace_dir)
@@ -151,6 +176,69 @@ fn cp_allows_source_in_additional_allowed_directories() {
         fs::read_to_string(workspace_dir.join("copied.txt")).unwrap(),
         "external-content"
     );
+}
+
+#[test]
+fn cp_allows_target_in_additional_allowed_directories() {
+    // カレント配下の source を additional_allowed_directories 配下へコピーできることを確認する。
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let workspace_dir = temp_path.join("workspace");
+    let external_dir = temp_path.join("external");
+    fs::create_dir(&workspace_dir).unwrap();
+    fs::create_dir(&external_dir).unwrap();
+
+    let source_file = workspace_dir.join("source.txt");
+    fs::write(&source_file, "workspace-content").unwrap();
+
+    let external_target = external_dir.join("copied.txt");
+    let config_path = write_config(temp_path, std::slice::from_ref(&external_dir));
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cp"));
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&workspace_dir)
+        .arg("source.txt")
+        .arg(&external_target)
+        .assert()
+        .success();
+
+    assert_eq!(
+        fs::read_to_string(&external_target).unwrap(),
+        "workspace-content"
+    );
+}
+
+#[test]
+fn cp_denies_source_outside_current_and_additional_scopes() {
+    // カレント配下外かつ追加許可外の source を拒否することを確認する。
+    let temp_dir = TempDir::new().unwrap();
+    let temp_path = temp_dir.path();
+
+    let workspace_dir = temp_path.join("workspace");
+    let additional_dir = temp_path.join("additional");
+    let forbidden_dir = temp_path.join("forbidden");
+    fs::create_dir(&workspace_dir).unwrap();
+    fs::create_dir(&additional_dir).unwrap();
+    fs::create_dir(&forbidden_dir).unwrap();
+
+    let forbidden_source = forbidden_dir.join("secret.txt");
+    fs::write(&forbidden_source, "secret-content").unwrap();
+
+    let config_path = write_config(temp_path, std::slice::from_ref(&additional_dir));
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cp"));
+    cmd.env("SAFECMD_CONFIG_PATH", &config_path)
+        .env("SAFECMD_DISABLE_TEST_MODE", "1")
+        .current_dir(&workspace_dir)
+        .arg(&forbidden_source)
+        .arg("copied.txt")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("path is outside allowed scope"));
+
+    assert!(!workspace_dir.join("copied.txt").exists());
 }
 
 #[test]
@@ -170,7 +258,7 @@ fn cp_denies_target_outside_allowed_scope() {
 
     let config_path = write_config(temp_path, &[]);
 
-    let mut cmd = Command::cargo_bin("cp").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cp"));
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(&workspace_dir)
@@ -191,7 +279,7 @@ fn rm_continues_after_creating_default_config() {
 
     let config_path = temp_path.join("nonexistent").join("config.toml");
 
-    let mut cmd = Command::cargo_bin("rm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("rm"));
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(temp_path)
