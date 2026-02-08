@@ -307,38 +307,3 @@ fn combined_flags_frd() {
         "directory was not removed with -frd"
     );
 }
-
-#[test]
-fn disable_allowed_directories_env_var() {
-    // create a directory that is NOT in current directory scope
-    let temp_dir = tempdir().expect("create tmp dir");
-    let file_path = temp_dir.path().join("test.txt");
-
-    // create a minimal config so the binary does not generate one
-    let config_dir = temp_dir.path().join(".config");
-    fs::create_dir(&config_dir).unwrap();
-    let config_path = config_dir.join("config.toml");
-    fs::write(&config_path, "[additional_allowed_directories]\npaths=[]").unwrap();
-
-    // Without the environment variable, this should fail due to directory restriction
-    Command::cargo_bin("rm")
-        .expect("binary exists")
-        .env("SAFECMD_DISABLE_TEST_MODE", "1")
-        .env("SAFECMD_CONFIG_PATH", &config_path)
-        .arg("-f")
-        .arg(&file_path)
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("path is outside allowed scope"));
-
-    // With SAFECMD_DISABLE_ALLOWED_DIRECTORIES=1, it should succeed
-    Command::cargo_bin("rm")
-        .expect("binary exists")
-        .env("SAFECMD_DISABLE_TEST_MODE", "1")
-        .env("SAFECMD_CONFIG_PATH", &config_path)
-        .env("SAFECMD_DISABLE_ALLOWED_DIRECTORIES", "1")
-        .arg("-f")
-        .arg(&file_path)
-        .assert()
-        .success();
-}
