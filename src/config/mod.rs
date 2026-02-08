@@ -192,7 +192,7 @@ impl Config {
         Ok(config_dir.join("config.toml"))
     }
 
-    /// デフォルト設定ファイルを作成し、初回設定を促す。
+    /// デフォルト設定ファイルを作成する。
     fn create_default_config(config_path: &Path) -> Result<(), String> {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
@@ -216,12 +216,7 @@ paths = [
             .map_err(|e| format!("Failed to create config file: {e}"))?;
 
         file.write_all(default_content.as_bytes())
-            .map_err(|e| format!("Failed to write default config: {e}"))?;
-
-        Err(format!(
-            "Created default configuration file at: {}\nPlease add additional allowed directories to the config file and try again.",
-            config_path.display()
-        ))
+            .map_err(|e| format!("Failed to write default config: {e}"))
     }
 }
 

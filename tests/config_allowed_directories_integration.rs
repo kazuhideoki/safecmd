@@ -184,8 +184,8 @@ fn cp_denies_target_outside_allowed_scope() {
 }
 
 #[test]
-fn config_creation_error_message_uses_new_field_name() {
-    // 自動生成メッセージが additional_allowed_directories 前提になっていることを確認する。
+fn rm_continues_after_creating_default_config() {
+    // 設定ファイル未作成時に自動生成後そのまま処理継続できることを確認する。
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
 
@@ -195,13 +195,12 @@ fn config_creation_error_message_uses_new_field_name() {
     cmd.env("SAFECMD_CONFIG_PATH", &config_path)
         .env("SAFECMD_DISABLE_TEST_MODE", "1")
         .current_dir(temp_path)
+        .arg("-f")
         .arg("file.txt")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "Created default configuration file at:",
-        ))
-        .stderr(predicate::str::contains(
-            "Please add additional allowed directories to the config file and try again",
-        ));
+        .success();
+
+    assert!(config_path.exists());
+    let content = fs::read_to_string(config_path).unwrap();
+    assert!(content.contains("[additional_allowed_directories]"));
 }
