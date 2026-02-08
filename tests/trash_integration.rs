@@ -103,6 +103,7 @@ fn non_empty_directory_with_d_flag_fails() {
 
 #[test]
 fn directory_with_r_flag() {
+    // -r でディレクトリを再帰削除できることを確認
     // create a directory with files
     let temp_dir = tempdir().expect("create tmp dir");
     let dir_path = temp_dir.path().join("dir_with_files");
@@ -125,6 +126,32 @@ fn directory_with_r_flag() {
     }
 
     // directory should no longer exist
+    assert!(
+        !dir_path.exists(),
+        "directory still exists at original path"
+    );
+}
+
+#[test]
+fn directory_with_uppercase_r_flag() {
+    // -R でディレクトリを再帰削除できることを確認
+    let temp_dir = tempdir().expect("create tmp dir");
+    let dir_path = temp_dir.path().join("dir_with_files_uppercase_r");
+    fs::create_dir(&dir_path).expect("create directory");
+
+    File::create(dir_path.join("file1.txt")).expect("create file1");
+    File::create(dir_path.join("file2.txt")).expect("create file2");
+
+    let sub_dir = dir_path.join("subdir");
+    fs::create_dir(&sub_dir).expect("create subdirectory");
+    File::create(sub_dir.join("file3.txt")).expect("create file3");
+
+    let mut cmd = Command::cargo_bin("rm").expect("binary exists");
+    cmd.arg("-R").arg(&dir_path);
+    if !assert_rm_success_or_skip(&mut cmd) {
+        return;
+    }
+
     assert!(
         !dir_path.exists(),
         "directory still exists at original path"
@@ -176,6 +203,7 @@ fn mixed_files_with_f_flag() {
 
 #[test]
 fn combined_flags_rf() {
+    // -rf の組み合わせで再帰削除できることを確認
     // test -rf combined flag
     let temp_dir = tempdir().expect("create tmp dir");
     let dir_path = temp_dir.path().join("dir_to_remove");
@@ -189,6 +217,23 @@ fn combined_flags_rf() {
     }
 
     assert!(!dir_path.exists(), "directory was not removed with -rf");
+}
+
+#[test]
+fn combined_flags_uppercase_rf() {
+    // -Rf の組み合わせで再帰削除できることを確認
+    let temp_dir = tempdir().expect("create tmp dir");
+    let dir_path = temp_dir.path().join("dir_to_remove_uppercase_rf");
+    fs::create_dir(&dir_path).expect("create directory");
+    File::create(dir_path.join("file.txt")).expect("create file");
+
+    let mut cmd = Command::cargo_bin("rm").expect("binary exists");
+    cmd.arg("-Rf").arg(&dir_path);
+    if !assert_rm_success_or_skip(&mut cmd) {
+        return;
+    }
+
+    assert!(!dir_path.exists(), "directory was not removed with -Rf");
 }
 
 #[test]
