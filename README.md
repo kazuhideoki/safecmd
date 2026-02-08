@@ -89,6 +89,7 @@ The tables below summarize implemented behavior in `safecmd` versus GNU `rm` and
 | `-r` | Enables recursive directory copy | Enables recursive directory copy | Recursion enabled |
 | `-R` | Alias of `-r` | Alias of recursive copy | Recursion enabled |
 | `--recursive` | Enables recursive directory copy | Enables recursive directory copy | Recursion enabled |
+| `-n` | Skips overwrite when destination is an existing regular file | `--no-clobber`: does not overwrite existing files | `safecmd cp` keeps type-conflict errors (for example file-to-directory) |
 | No recursive flag (directory source) | Fails with `omitting directory` | Fails with `-r not specified; omitting directory` | Same outcome; wording differs |
 | Overwrite existing target | Moves existing target to trash, then copies | Overwrites destination directly | `safecmd cp` adds a trash-first safety step |
-| Unsupported (for example `-a`, `-p`, `--preserve`, `--no-clobber`) | Not available | Available depending on flag | `safecmd cp` currently supports a focused subset |
+| Unsupported (for example `-a`, `-p`, `--preserve`) | Not available | Available depending on flag | `safecmd cp` currently supports a focused subset |

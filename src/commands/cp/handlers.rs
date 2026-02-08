@@ -98,11 +98,13 @@ pub fn execute(task: &CopyTask, context: &ProcessContext) -> Result<(), String> 
     match task.kind {
         CopyKind::File => {
             if task.final_target.exists() {
-                if context.no_clobber {
+                if context.no_clobber && task.final_target.is_file() {
                     return Ok(());
                 }
-                trash::delete(&task.final_target)
-                    .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
+                if !context.no_clobber {
+                    trash::delete(&task.final_target)
+                        .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
+                }
             }
 
             fs::copy(&task.source, &task.final_target)
@@ -116,12 +118,19 @@ pub fn execute(task: &CopyTask, context: &ProcessContext) -> Result<(), String> 
                     )
                 })
         }
-        CopyKind::RecursiveDirectory => copy_dir_recursive(
-            &task.source,
-            &task.final_target,
-            &context.config,
-            context.no_clobber,
-        ),
+        CopyKind::RecursiveDirectory => {
+            if task.final_target.exists() && !context.no_clobber {
+                trash::delete(&task.final_target)
+                    .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
+            }
+
+            copy_dir_recursive(
+                &task.source,
+                &task.final_target,
+                &context.config,
+                context.no_clobber,
+            )
+        }
         CopyKind::DirectoryWithoutRecursive => {
             Err(format!("cp: omitting directory '{}'", task.source_label))
         }
@@ -170,7 +179,14 @@ fn copy_dir_recursive(
         if entry_path.is_file() {
             if target_path.exists() {
                 if no_clobber {
-                    continue;
+                    if target_path.is_file() {
+                        continue;
+                    }
+                    return Err(format!(
+                        "cp: cannot copy '{}' to '{}': destination is not a file",
+                        entry_path.display(),
+                        target_path.display()
+                    ));
                 }
                 trash::delete(&target_path)
                     .map_err(|e| format!("cp: failed to move existing file to trash: {e}"))?;
