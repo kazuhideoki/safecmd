@@ -30,15 +30,14 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
         ));
     }
 
-    if !path.exists() {
+    if std::fs::symlink_metadata(path).is_err() {
         if context.args.force {
             return Ok(());
-        } else {
-            return Err(format!(
-                "rm: cannot remove '{}': No such file or directory",
-                path.display()
-            ));
         }
+        return Err(format!(
+            "rm: cannot remove '{}': No such file or directory",
+            path.display()
+        ));
     }
 
     let handler = determine_handler(path, context)?;
@@ -50,9 +49,11 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
 fn determine_handler(path: &Path, context: &ProcessContext) -> Result<RemovalKind, String> {
     use RemovalKind::*;
 
-    match std::fs::metadata(path) {
+    match std::fs::symlink_metadata(path) {
         Ok(meta) => {
-            if meta.is_dir() {
+            if meta.file_type().is_symlink() {
+                Ok(File)
+            } else if meta.is_dir() {
                 if context.args.recursive {
                     Ok(RecursiveDirectory)
                 } else if context.args.allow_dir {
@@ -71,5 +72,63 @@ fn determine_handler(path: &Path, context: &ProcessContext) -> Result<RemovalKin
                 Err(format!("rm: cannot remove '{}': {e}", path.display()))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{AdditionalAllowedDirectories, Config};
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+
+    /// テスト用の最小コンテキストを生成する。
+    fn build_context(recursive: bool) -> ProcessContext {
+        ProcessContext::new(
+            Args {
+                allow_dir: false,
+                force: false,
+                recursive,
+                path: vec![],
+            },
+            Config {
+                additional_allowed_directories: AdditionalAllowedDirectories {
+                    paths: vec![std::path::PathBuf::from("/")],
+                },
+            },
+        )
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn determine_handler_treats_directory_symlink_as_file_without_r() {
+        // ディレクトリへのシンボリックリンクは通常時に File と判定されることを確認する。
+        let temp_dir = TempDir::new().unwrap();
+        let linked_dir = temp_dir.path().join("linked");
+        std::fs::create_dir(&linked_dir).unwrap();
+        let symlink_path = temp_dir.path().join("dir_link");
+        symlink(&linked_dir, &symlink_path).unwrap();
+
+        let context = build_context(false);
+        let kind = determine_handler(&symlink_path, &context).unwrap();
+
+        assert!(matches!(kind, RemovalKind::File));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn determine_handler_treats_directory_symlink_as_file_with_r() {
+        // -r 指定時でもシンボリックリンクは File と判定されることを確認する。
+        let temp_dir = TempDir::new().unwrap();
+        let linked_dir = temp_dir.path().join("linked");
+        std::fs::create_dir(&linked_dir).unwrap();
+        let symlink_path = temp_dir.path().join("dir_link");
+        symlink(&linked_dir, &symlink_path).unwrap();
+
+        let context = build_context(true);
+        let kind = determine_handler(&symlink_path, &context).unwrap();
+
+        assert!(matches!(kind, RemovalKind::File));
     }
 }
