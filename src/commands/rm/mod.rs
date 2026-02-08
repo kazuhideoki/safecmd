@@ -1,11 +1,12 @@
 pub mod args;
-pub mod strategy;
+pub mod handlers;
 
 use crate::config::Config;
 use args::Args;
+use handlers::{ProcessContext, RemovalKind};
 use std::path::Path;
-use strategy::{ProcessContext, RemovalStrategy};
 
+/// rm コマンド全体を実行し、各パスの処理結果に応じて終了コードを決定する。
 pub fn run(args: Args, config: Config) -> i32 {
     let mut exit_code = 0;
     let context = ProcessContext::new(args, config);
@@ -20,6 +21,7 @@ pub fn run(args: Args, config: Config) -> i32 {
     exit_code
 }
 
+/// 単一パスに対して許可範囲確認・ハンドラ選択・実行までを一貫して行う。
 fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
     if !context.config.is_path_allowed(path) {
         return Err(format!(
@@ -39,34 +41,32 @@ fn process_path(path: &Path, context: &ProcessContext) -> Result<(), String> {
         }
     }
 
-    let strategy = determine_strategy(path, context)?;
-    strategy.validate(path, context)?;
-    strategy.execute(path, context)
+    let handler = determine_handler(path, context)?;
+    handlers::validate(&handler, path, context)?;
+    handlers::execute(&handler, path, context)
 }
 
-fn determine_strategy(
-    path: &Path,
-    context: &ProcessContext,
-) -> Result<Box<dyn RemovalStrategy>, String> {
-    use strategy::*;
+/// 対象パスの種類とオプションに応じて適切な削除ハンドラを選択する。
+fn determine_handler(path: &Path, context: &ProcessContext) -> Result<RemovalKind, String> {
+    use RemovalKind::*;
 
     match std::fs::metadata(path) {
         Ok(meta) => {
             if meta.is_dir() {
                 if context.args.recursive {
-                    Ok(Box::new(RecursiveDirectoryStrategy))
+                    Ok(RecursiveDirectory)
                 } else if context.args.allow_dir {
-                    Ok(Box::new(EmptyDirectoryStrategy))
+                    Ok(EmptyDirectory)
                 } else {
-                    Ok(Box::new(DirectoryErrorStrategy))
+                    Ok(DirectoryError)
                 }
             } else {
-                Ok(Box::new(FileStrategy))
+                Ok(File)
             }
         }
         Err(e) => {
             if context.args.force && e.kind() == std::io::ErrorKind::NotFound {
-                Ok(Box::new(NonExistentFileStrategy))
+                Ok(NonExistentFile)
             } else {
                 Err(format!("rm: cannot remove '{}': {e}", path.display()))
             }
