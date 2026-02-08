@@ -9,3 +9,6 @@ paths = [
     # Example: "/Users/yourname/Documents",
     "/tmp"
 ]
+
+[notify]
+macos_notify = false
