@@ -3,6 +3,8 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
+use trash::macos::{DeleteMethod, TrashContextExtMacos};
 
 pub mod args;
 
@@ -198,9 +200,26 @@ fn handle_existing_target(
         ));
     }
 
-    trash::delete(final_target)
-        .map_err(|e| format!("mv: failed to move existing file to trash: {e}"))?;
+    move_existing_target_to_trash(final_target)?;
     Ok(DestinationAction::RenameDirectly)
+}
+
+/// 既存ターゲットをシステムのゴミ箱へ移動する。
+fn move_existing_target_to_trash(target: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Finder 経由の削除は権限ダイアログを誘発しうるため、テスト時も安定する実装を使う。
+        let mut context = trash::TrashContext::new();
+        context.set_delete_method(DeleteMethod::NsFileManager);
+        context
+            .delete(target)
+            .map_err(|e| format!("mv: failed to move existing file to trash: {e}"))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        trash::delete(target).map_err(|e| format!("mv: failed to move existing file to trash: {e}"))
+    }
 }
 
 /// ソースを最終ターゲットの親ディレクトリへ一時退避する。
